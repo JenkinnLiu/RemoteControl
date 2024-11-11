@@ -2,10 +2,24 @@
 #include "framework.h"
 #include "pch.h"
 
+#pragma pack(push)
+#pragma pack(1)
+
 class CPacket
 {
 public:
     CPacket() :sHead(0), nLength(0), sCmd(0), sSum(0) {}
+    CPacket(WORD nCmd, const BYTE* pData, size_t nSize) {//打包构造函数
+        sHead = 0xFEFF;
+        nLength = nSize + 4;
+        sCmd = nCmd;
+        strData.resize(nSize);
+        memcpy((void*)strData.c_str(), pData, nSize);
+        sSum = 0;
+        for (size_t j = 0; j < strData.size(); j++) {
+            sSum += BYTE(strData[j]) & 0xFF;
+        }
+    }
     CPacket(const CPacket& pack) {//拷贝构造函数
         sHead = pack.sHead;
         nLength = pack.nLength;
@@ -23,7 +37,7 @@ public:
         return *this;
     }
     CPacket(const BYTE* pData, size_t& nSize) :sHead(0), nLength(0), sCmd(0), sSum(0)
-    {//这个构造函数用于解析数据包
+    {//这个构造函数用于解析数据包，解包构造函数
         size_t i = 0;
         for (i = 0; i < nSize; i++) {
             if (*(WORD*)(pData + i) == 0xFEFF) {
@@ -66,13 +80,33 @@ public:
     {
 
     };
+    int Size() {
+		return nLength + 6;//包头+包长+包数据，包数据的大小
+    }
+	const char* Data() {//返回整个包的数据,复制到缓冲区strOut中
+		strOut.resize(nLength + 6);
+		BYTE* pData = (BYTE*)strOut.c_str();
+		*(WORD*)pData = sHead;//包头
+		*(DWORD*)(pData + 2) = nLength;//包长
+        pData += 4;
+		*(WORD*)pData = sCmd;//命令
+		pData += 2;
+		memcpy(pData, strData.c_str(), strData.size());//包数据
+		pData += strData.size();  
+		*(WORD*)pData = sSum;//校验和
+		return strOut.c_str();
+    }
 public:
     WORD sHead;//包头，固定为FE FF
     DWORD nLength;//包长（从控制命令开始到校验和结束）
     std::string strData;//包数据
     WORD sCmd;//控制命令
     WORD sSum;//校验和
+    std::string strOut;//整个包的数据
 };
+
+
+#pragma pack(pop)
 
 class CServerSocket
 {
@@ -132,8 +166,11 @@ public:
     }
     bool Send(const char* pData, int size) {
         if (m_client == -1) return false;
-        send(m_client, pData, size, 0);
-        return true;
+        return send(m_client, pData, size, 0) > 0;
+    }
+    bool Send(CPacket& pack) {
+        if (m_client == -1) return false;
+        return send(m_client, pack.Data(), pack.Size(), 0) > 0;
     }
 private:
     SOCKET m_client;
