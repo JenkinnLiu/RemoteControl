@@ -44,6 +44,62 @@ int MakeDriverInfo() {//创建磁盘分区信息, 1->A, 2->B, 3->C,..., 26->Z
     //CServerSocket::getInstance()->Send(CPacket(1, (BYTE*)result.c_str(), result.size()));
     return 0;
 }
+#include<stdio.h>
+#include<io.h>
+#include<list>
+typedef struct file_info{
+    file_info() {//结构体构造函数
+        IsInvalid = 0;
+        IsDirectory = -1;
+        HasNext = 1;
+        memset(szFileName, 0, sizeof szFileName);
+    }
+    BOOL IsInvalid;//是否为无效目录
+    BOOL IsDirectory;//是否为目录： 0 否， 1 是
+    BOOL HasNext;//是否还有后续： 0 没有， 1 有
+    char szFileName[256];//文件名
+}FILEINFO, *PFILEINFO;
+
+int MakeDirectoryInfo() {
+    std::string strPath;
+    //std::list<FILEINFO> lstFileInfos;
+    if (CServerSocket::getInstance()->GetFilePath(strPath) == false) {
+        OutputDebugString(_T("当前的命令不是获取文件列表，命令解析错误！！"));
+        return -1;
+    }
+    if (_chdir(strPath.c_str()) != 0) {//切换目录
+        FILEINFO finfo;
+        finfo.IsInvalid = TRUE;//标记为无效
+        finfo.IsDirectory = TRUE;
+        finfo.HasNext = FALSE;
+        memcpy(finfo.szFileName, strPath.c_str(), strPath.size());
+        //lstFileInfos.push_back(finfo);
+        CPacket pack(2, (BYTE*)& finfo, sizeof(finfo));
+        CServerSocket::getInstance()->Send(pack);
+        OutputDebugString(_T("没有权限，访问目录！！"));
+        return -2;
+    }
+    _finddata_t fdata;
+    int hfind = 0;
+    if (_findfirst("*", &fdata) == -1) {//查找*文件失败
+        OutputDebugString(_T("没有找到任何文件！！"));
+        return -3;
+    }
+    do {
+        FILEINFO finfo;
+        finfo.IsDirectory = (fdata.attrib & _A_SUBDIR) != 0;//判断是否为文件夹
+        memcpy(finfo.szFileName, fdata.name, strlen(fdata.name));
+        //lstFileInfos.push_back(finfo);//放进列表内
+        CPacket pack(2, (BYTE*)&finfo, sizeof(finfo));
+        CServerSocket::getInstance()->Send(pack);
+    } while (!_findnext(hfind, &fdata));
+    //发送信息到控制端
+    FILEINFO finfo;
+    finfo.HasNext = FALSE;
+    CPacket pack(2, (BYTE*)&finfo, sizeof(finfo));
+    CServerSocket::getInstance()->Send(pack);
+    return 0;
+}
 
 
 int main()
@@ -90,6 +146,9 @@ int main()
 			case 1://查看磁盘分区信息
 				MakeDriverInfo();
 				break;
+            case 2://查看指定目录下的文件
+                MakeDirectoryInfo();
+
             }
 		}
         // TODO: 在此处为应用程序的行为编写代码。
