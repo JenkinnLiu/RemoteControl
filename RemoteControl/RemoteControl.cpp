@@ -67,7 +67,7 @@ int MakeDirectoryInfo() {
         OutputDebugString(_T("当前的命令不是获取文件列表，命令解析错误！！"));
         return -1;
     }
-    if (_chdir(strPath.c_str()) != 0) {//切换目录
+    if (_chdir(strPath.c_str()) != 0) {//切换目录失败
         FILEINFO finfo;
         finfo.IsInvalid = TRUE;//标记为无效
         finfo.IsDirectory = TRUE;
@@ -81,7 +81,7 @@ int MakeDirectoryInfo() {
     }
     _finddata_t fdata;
     int hfind = 0;
-    if (_findfirst("*", &fdata) == -1) {//查找*文件失败
+    if (_findfirst("*", &fdata) == -1) {//查找*文件失败，没有文件
         OutputDebugString(_T("没有找到任何文件！！"));
         return -3;
     }
@@ -101,6 +101,44 @@ int MakeDirectoryInfo() {
     return 0;
 }
 
+int RunFile() {
+    std::string strPath;
+    CServerSocket::getInstance()->GetFilePath(strPath);
+    ShellExecuteA(NULL, NULL, strPath.c_str(), NULL, NULL, SW_SHOWNORMAL);//执行文件
+    CPacket pack(3, NULL, 0);
+    CServerSocket::getInstance()->Send(pack);
+    return 0;
+}
+
+int DownloadFile() {
+    std::string strPath;
+    CServerSocket::getInstance()->GetFilePath(strPath);
+    long long data = 0;
+    FILE* pFile = NULL;
+    //如果用fopen报错C4996，要么改用fopen_s，要么添加_CRT_SECURE_NO_WARNINGS,要么#pragma warning(disable:4996)
+    errno_t err = fopen_s(&pFile, strPath.c_str(), "rb");//文本文件按二进制方式读
+    if (err != 0) {
+        CPacket pack(4, (BYTE*)&data, 8);//打开失败，传个NULL结束
+        CServerSocket::getInstance()->Send(pack);
+        return -1;
+    }
+    if (pFile != NULL) {
+        fseek(pFile, 0, SEEK_END);//拿一个文件的长度
+        data = _ftelli64(pFile);
+        CPacket head(4, (BYTE*)&data, 8);//发送文件长度
+        fseek(pFile, 0, SEEK_SET);
+        char buffer[1024] = "";
+        size_t rlen = 0;
+        do {
+            rlen = fread(buffer, 1, 1024, pFile);//一次读1字节，读1024次
+            CPacket pack(4, (BYTE*)buffer, rlen);
+        } while (rlen >= 1024);
+        fclose(pFile);//别忘了关文件
+    }
+    CPacket pack(4, NULL, 0);//收到NULL代表结尾
+    CServerSocket::getInstance()->Send(pack);
+    return 0;
+}
 
 int main()
 {
@@ -148,7 +186,12 @@ int main()
 				break;
             case 2://查看指定目录下的文件
                 MakeDirectoryInfo();
-
+            case 3://打开文件
+                RunFile();
+                break;
+            case 4://下载文件
+                DownloadFile();
+                break;
             }
 		}
         // TODO: 在此处为应用程序的行为编写代码。
