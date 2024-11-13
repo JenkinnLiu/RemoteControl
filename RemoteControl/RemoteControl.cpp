@@ -234,6 +234,40 @@ int MouseEvent() {
     return 0;
 }
 
+#include<atlimage.h>//传图片
+int SendScreen() {
+    CImage screen;//GDI 全局设备接口
+    HDC hScreen = ::GetDC(NULL);//获取设备参数
+	int nBitPerPixel = GetDeviceCaps(hScreen, BITSPIXEL);//获取像素位数
+	int nWidth = GetDeviceCaps(hScreen, HORZRES);//获取显示设备的水平分辨率(1920)
+	int nHeight = GetDeviceCaps(hScreen, VERTRES);//获取显示设备的垂直分辨率(1080)
+	screen.Create(nWidth, nHeight, nBitPerPixel);//创建一个指定大小的位图
+	BitBlt(screen.GetDC(), 0, 0, nWidth, nHeight, hScreen, 0, 0, SRCCOPY);//拷贝屏幕截图到位图,将图片进行传输
+	ReleaseDC(NULL, hScreen);//释放设备上下文
+	//PNG图片生成时间长，耗CPU多，但图片大小比较小，节省带宽
+	HGLOBAL hMem = GlobalAlloc(GMEM_MOVEABLE, 0);//分配内存
+    if (hMem == NULL) return -1;
+	IStream* pStream = NULL;//流
+	HRESULT ret = CreateStreamOnHGlobal(hMem, TRUE, &pStream);//创建流
+	
+	if (ret == S_OK) {//如果创建流成功
+        screen.Save(pStream, Gdiplus::ImageFormatPNG);//保存PNG图片到流里面
+        //screen.Save(_T("screen.png"), Gdiplus::ImageFormatPNG);//直接保存PNG图片
+		LARGE_INTEGER bg = { 0 };//大整数
+		pStream->Seek(bg, STREAM_SEEK_SET, NULL);// 从流的开头开始
+		PBYTE pData = (PBYTE)GlobalLock(hMem);//锁定内存,这样就可以读内存
+		SIZE_T nSize = GlobalSize(hMem);//获取内存大小
+		CPacket pack(6, pData, nSize);//告诉控制端图片开始传输
+		CServerSocket::getInstance()->Send(pack);
+        GlobalUnlock(hMem);//解锁内存,表示访问完成
+		
+	}
+	pStream->Release();//释放流
+    screen.ReleaseDC();
+    GlobalFree(hMem);//释放内存
+    return 0;
+}
+
 int main()
 {
     int nRetCode = 0;
@@ -273,7 +307,7 @@ int main()
   //          }
 		//		
         // 
-            int nCmd = 1;
+            int nCmd = 6;
             switch (nCmd) {
 			case 1://查看磁盘分区信息
 				MakeDriverInfo();
@@ -289,7 +323,12 @@ int main()
             case 5://鼠标操作
                 MouseEvent();
                 break;
+            case 6://发送屏幕内容->发送屏幕的截图
+                SendScreen();
+                break;
             }
+            
+
 		}
         // TODO: 在此处为应用程序的行为编写代码。
         //WSADATA data;
