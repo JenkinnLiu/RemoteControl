@@ -268,6 +268,72 @@ int SendScreen() {
     return 0;
 }
 
+#include "LockDialog.h"
+CLockDialog dlg;//全局变量
+unsigned threadId = 0;//线程ID
+
+unsigned __stdcall threadLockDlg(void* arg) {//线程函数
+    dlg.Create(IDD_DIALOG_INFO, NULL);//创建窗口
+    dlg.ShowWindow(SW_SHOW);//显示窗口
+    //dlg.SetWindowPos(&dlg.wndTopMost, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE);//窗口置顶
+    //获取设备屏幕分辨率并将该窗口置于右下角
+    int nWidth = GetSystemMetrics(SM_CXSCREEN);//获取屏幕宽度
+    int nHeight = GetSystemMetrics(SM_CYSCREEN);//获取屏幕高度
+    dlg.SetWindowPos(&dlg.wndTopMost, nWidth - 300, nHeight - 10, 300, 10, SWP_NOSIZE | SWP_SHOWWINDOW);
+
+
+    //限制鼠标活动范围和功能
+    ShowCursor(false);//隐藏鼠标
+    ::ShowWindow(::FindWindow(_T("Shell_TrayWnd"), NULL), SW_HIDE);//隐藏任务栏
+    
+    CRect rect;//矩形
+    dlg.GetWindowRect(rect);//获取窗口矩形
+    rect.right = rect.left + 1;
+    rect.bottom = rect.top + 1;//限制鼠标活动范围
+    ClipCursor(rect);//限制鼠标只能在窗口内活动
+
+    //建立消息循环
+    MSG msg;
+    while (GetMessage(&msg, NULL, 0, 0)) {
+        TranslateMessage(&msg);//翻译消息
+        DispatchMessage(&msg);//分发消息
+        if (msg.message == WM_KEYDOWN) {
+            TRACE("msg%08X lparam:%08X wparam:%08x\r\n", msg.message, msg.wParam, msg.lParam);//wParam就是按键的ASCII码，lParam是键盘的扫描码
+            if (msg.wParam == 0x1B) {//按下ESC键(0x1B是ESC键的ASCII码）
+        
+                break;
+            }
+
+
+        }
+    }
+    dlg.DestroyWindow();//销毁窗口
+    ShowCursor(true);
+    ::ShowWindow(::FindWindow(_T("Shell_TrayWnd"), NULL), SW_SHOW);//重新显示任务栏
+
+	_endthreadex(0);//别忘了结束线程
+	return 0;
+}
+
+int LockMachine() {
+	if ((dlg.m_hWnd == NULL) || (dlg.m_hWnd == INVALID_HANDLE_VALUE)) {//如果窗口不存在
+		//不用_beginthreadex创建线程，因为指定不了线程ID，无法向线程发送消息
+        _beginthreadex(NULL, 0, threadLockDlg, NULL, 0, &threadId);//创建线程
+    }
+    CPacket pack(7, NULL, 0);//告诉控制端窗口已经存在
+    CServerSocket::getInstance()->Send(pack);
+    return 0;
+}
+
+int UnlockMachine() {
+	//dlg.SendMessage(WM_KEYDOWN, 0x1B, 0x01E0001);//发送esc按键消息, 0x01E0001是键盘的扫描码, 扫描码是指键盘上的每个键对应的一个值
+	PostThreadMessage(threadId, WM_KEYDOWN, 0x1B, 0x01E0001);//向线程发送esc按键消息,threadId换成GetCurrentThreadId()也可以
+    //消息泵需要>30ms，因此为了线程同步，sleep要尽量大于30ms
+    CPacket pack(8, NULL, 0);//告诉控制端窗口已经销毁
+	CServerSocket::getInstance()->Send(pack);
+    return 0;
+}
+
 int main()
 {
     int nRetCode = 0;
@@ -307,7 +373,8 @@ int main()
   //          }
 		//		
         // 
-            int nCmd = 6;
+            
+            int nCmd = 7;
             switch (nCmd) {
 			case 1://查看磁盘分区信息
 				MakeDriverInfo();
@@ -326,8 +393,18 @@ int main()
             case 6://发送屏幕内容->发送屏幕的截图
                 SendScreen();
                 break;
+            case 7: //锁机
+                LockMachine();
+                //Sleep(50);
+                break;
+            case 8://解锁
+                UnlockMachine();
+                break;
             }
-            
+            Sleep(5000);
+			UnlockMachine();
+            while(dlg.m_hWnd != NULL && dlg.m_hWnd != INVALID_HANDLE_VALUE)
+				Sleep(100);//等待窗口销毁
 
 		}
         // TODO: 在此处为应用程序的行为编写代码。
