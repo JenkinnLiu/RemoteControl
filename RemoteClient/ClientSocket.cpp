@@ -5,3 +5,19 @@ CClientSocket* CClientSocket::m_instance = NULL;//¾²Ì¬³ÉÔ±±äÁ¿³õÊ¼»¯,±ØĞëÏÔÊ½³õÊ
 CClientSocket::CHelper CClientSocket::m_helper;//È·±£¹¹Ôìº¯ÊıÈ«¾ÖÎ¨Ò»
 
 CClientSocket* pclient = CClientSocket::getInstance();//µ¥ÀıÄ£Ê½£¬Ã¿´ÎÖ»ÄÜÓĞÒ»¸öÊµÀı
+
+std::string GetErrInfo(int WSAErrCode){
+    std::string ret;
+    LPVOID lpMsgBuf = NULL;
+    FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,//¸ñÊ½»¯ĞÅÏ¢
+        NULL,
+        WSAErrCode,
+        MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), // Ä¬ÈÏÓïÑÔ
+        (LPTSTR)&lpMsgBuf,
+        0,
+        NULL
+    );//»ñÈ¡´íÎóĞÅÏ¢,WSAErrCodeÊÇ´íÎóÂë
+    ret = (char*)lpMsgBuf;
+    LocalFree(lpMsgBuf);
+    return ret;
+}

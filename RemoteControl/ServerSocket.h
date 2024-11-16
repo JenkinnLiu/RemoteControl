@@ -44,7 +44,7 @@ public:
     CPacket(const BYTE* pData, size_t& nSize) :sHead(0), nLength(0), sCmd(0), sSum(0)
     {//这个构造函数用于解析数据包，解包构造函数
         size_t i = 0;
-        for (i = 0; i < nSize; i++) {
+        for (i; i < nSize; i++) {
             if (*(WORD*)(pData + i) == 0xFEFF) {
                 sHead = *(WORD*)(pData + i);//找到包头
                 i += 2;
@@ -53,12 +53,14 @@ public:
         }
         if (i + 4 + 2 + 2 > nSize) {//包头+包长+命令+校验和，包数据不全或包头未找到
             nSize = 0;
+            TRACE("没有找到包头，解析失败\r\n");
             return;//没有找到包头,解析失败
         }
         nLength = *(DWORD*)(pData + i);//包长
         i += 4;
         if (nLength + i > nSize) {//包长不够,包未接收完整，解析失败
             nSize = 0;
+            TRACE("包长不够,包未接收完整，解析失败\r\n");
             return;
         }
         sCmd = *(WORD*)(pData + i);//命令
@@ -77,6 +79,7 @@ public:
         }
         if (sum == sSum) {
             nSize = i;
+            TRACE("校验和通过，包解析成功\r\n");
             return;
         }
         nSize = 0;
@@ -92,7 +95,8 @@ public:
 		strOut.resize(nLength + 6);
 		BYTE* pData = (BYTE*)strOut.c_str();
 		*(WORD*)pData = sHead;//包头
-		*(DWORD*)(pData + 2) = nLength;//包长
+		pData += 2;
+		*(DWORD*)(pData) = nLength;//包长
         pData += 4;
 		*(WORD*)pData = sCmd;//命令
 		pData += 2;
@@ -153,6 +157,7 @@ public:
         return true;
     }
     bool AcceptClient() {
+		TRACE("服务器已经与客户端连接，等待客户端发送数据\r\n");
         sockaddr_in client_adr;
         int cli_sz = sizeof client_adr;
         m_client = accept(m_sock, (sockaddr*)&client_adr, &cli_sz);
@@ -164,21 +169,33 @@ public:
         if (m_client == -1) return -1;
         //char buffer[1024];
         char* buffer = new char[BUFFER_SIZE];
+        if (buffer == NULL) {
+			TRACE("内存不足，分配失败！\r\n");
+            return -2;
+        }
         memset(buffer, 0, BUFFER_SIZE);
 		size_t index = 0;//未处理数据的长度
         while (true) {
             size_t len = recv(m_client, buffer + index, BUFFER_SIZE - index, 0);
-            if (len <= 0) return -1;
+            if (len <= 0) {
+                delete[] buffer;
+                return -1;
+            }
+			TRACE("服务器接收到测试数据，server recv len:%d\r\n", len);
             //TODO:处理命令
 			index += len;//未处理数据的长度多了len
             len = index;
+			TRACE("buffer的len变成了，:%d\r\n", len);
 			m_packet = CPacket((BYTE*)buffer, len);
+			TRACE("服务器接收到测试数据，server recv len:%d, cmd:%d\r\n", len, m_packet.sCmd);
 			if (len > 0) {//解析成功，len是解析成功的包长
 				memmove(buffer, buffer + len, BUFFER_SIZE - len);
 				index -= len;//未处理数据的长度，这里处理了len，所以减去len
+				delete[] buffer;
                 return m_packet.sCmd;
             }
         }
+        delete[] buffer;
         return -1;
     }
     bool Send(const char* pData, int size) {
@@ -203,6 +220,14 @@ public:
         }
         return false;
     }
+    CPacket& GetPacket() {
+        return m_packet;
+    }
+	void CloseClient() {
+		closesocket(m_client);
+        m_client = INVALID_SOCKET;
+	}
+
 private:
     SOCKET m_client;
     SOCKET m_sock;

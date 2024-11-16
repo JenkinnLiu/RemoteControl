@@ -3,6 +3,7 @@
 #include "pch.h"
 #include <string>
 #include <ws2tcpip.h>//inet_pton
+#include <vector>
 
 #pragma pack(push)
 #pragma pack(1)
@@ -94,7 +95,8 @@ public:
         strOut.resize(nLength + 6);
         BYTE* pData = (BYTE*)strOut.c_str();
         *(WORD*)pData = sHead;//包头
-        *(DWORD*)(pData + 2) = nLength;//包长
+		pData += 2;
+        *(DWORD*)(pData) = nLength;//包长
         pData += 4;
         *(WORD*)pData = sCmd;//命令
         pData += 2;
@@ -127,21 +129,7 @@ typedef struct MouseEvent {
 
 }MOUSEEV, * PMOUSEEV;
 
-std::string GetErrorInfo(int WSAErrCode) {
-    std::string ret;
-    LPVOID lpMsgBuf = NULL;
-	FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,//格式化信息
-		NULL, 
-        WSAErrCode, 
-		MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), // 默认语言
-        (LPTSTR)&lpMsgBuf,
-        0, 
-        NULL
-    );//获取错误信息,WSAErrCode是错误码
-	ret = (char*)lpMsgBuf;
-	LocalFree(lpMsgBuf);
-    return ret;
-}
+std::string GetErrInfo(int WSAErrCode);
 
 class CClientSocket
 {
@@ -157,25 +145,31 @@ public:
         return m_instance;
     }
     bool InitSocket(const std::string& strIPAdress) {//客户端需要输入IP地址
-
+		if (m_sock != INVALID_SOCKET) CloseSocket();//如果已经连接，先关闭socket再重开一个
+		m_sock = socket(PF_INET, SOCK_STREAM, 0);//IPV4, TCP,客户端需要重新建立socket
         if (m_sock == -1) return false;
         sockaddr_in serv_adr;
         memset(&serv_adr, 0, sizeof serv_adr);
         serv_adr.sin_family = AF_INET;//IPV4地址族
 		//如果inet_addr报C4996, 用inet_pton, inet_addr是过时的函数，或者在属性，预处理器定义中加入WINSOCK_DEPRECATED_NO_WARNINGS
         //serv_adr.sin_addr.s_addr = inet_addr(strIPAdress.c_str());//在所有IP上监听
-		serv_adr.sin_addr.s_addr = inet_pton(AF_INET, strIPAdress.c_str(), &serv_adr.sin_addr.s_addr);
-
+		int ret = inet_pton(AF_INET, strIPAdress.c_str(), &serv_adr.sin_addr.s_addr);
+        if (ret == 1) {
+			TRACE("inet_pton success!\r\n");
+        }
+        else {
+            TRACE("inet_pton failed, %d %s\r\n", WSAGetLastError(), GetErrInfo(WSAGetLastError()).c_str());
+        }
         serv_adr.sin_port = htons(9527);
         if (serv_adr.sin_addr.s_addr == INADDR_NONE) {
 			AfxMessageBox("无效的IP地址！");
             return false;
         }
-		int ret = connect(m_sock, (sockaddr*)&serv_adr, sizeof serv_adr);//连接服务器
+		ret = connect(m_sock, (sockaddr*)&serv_adr, sizeof serv_adr);//连接服务器
         if (ret == -1) {
 			//这里要设置使用多字节字符集，不使用Unicode, 不然会报错，
 			AfxMessageBox("无法连接服务器,请检查网络设置！");//AfxMessagBox是MFC的消息框
-			TRACE("连接失败， %d %s\r\n", WSAGetLastError(), GetErrorInfo(WSAGetLastError()).c_str());
+			TRACE("连接失败， %d %s\r\n", WSAGetLastError(), GetErrInfo(WSAGetLastError()).c_str());
         }
         return true;
     }
@@ -183,12 +177,15 @@ public:
     int DealCommand() {
         if (m_sock == -1) return -1;
         //char buffer[1024];
-        char* buffer = new char[BUFFER_SIZE];
+        //char* buffer = new char[BUFFER_SIZE];
+		char* buffer = m_buffer.data();//用vector的data函数返回指向数组的指针，不用担心内存泄漏
         memset(buffer, 0, BUFFER_SIZE);
         size_t index = 0;//未处理数据的长度
         while (true) {
-            size_t len = recv(m_sock, buffer + index, BUFFER_SIZE - index, 0);
-            if (len <= 0) return -1;
+            size_t len = recv(m_sock, buffer + index, BUFFER_SIZE - index, 0);//接收服务器处理结果
+            if (len <= 0) {
+                return -1;
+            }
             //TODO:处理命令
             index += len;//未处理数据的长度多了len
             len = index;
@@ -206,6 +203,7 @@ public:
         return send(m_sock, pData, size, 0) > 0;
     }
     bool Send(CPacket& pack) {
+        TRACE("向服务器send测试数据, 包长为%d，m_sock == %d\r\n", pack.Size(), m_sock);
         if (m_sock == -1) return false;
         return send(m_sock, pack.Data(), pack.Size(), 0) > 0;
     }
@@ -223,7 +221,15 @@ public:
         }
         return false;
     }
+    CPacket& GetPacket() {
+        return m_packet;
+    }
+	void CloseSocket() {
+		closesocket(m_sock);
+        m_sock = INVALID_SOCKET;//-1
+	}
 private:
+    std::vector<char> m_buffer;
     SOCKET m_sock;
     CPacket m_packet;
     CClientSocket& operator=(const CClientSocket& ss) {//赋值构造函数
@@ -238,7 +244,9 @@ private:
             MessageBox(NULL, _T("无法初始化套接字环境,请检查网络设置！"), _T("初始化错误"), MB_OK | MB_ICONERROR);
             exit(0);
         }
-        m_sock = socket(PF_INET, SOCK_STREAM, 0);//IPV4, TCP
+		m_buffer.resize(BUFFER_SIZE);
+		//m_sock = socket(PF_INET, SOCK_STREAM, 0);//IPV4, TCP，服务端可以，客户端不行
+
     };
     ~CClientSocket() {
         closesocket(m_sock);
