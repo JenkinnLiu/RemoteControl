@@ -40,7 +40,7 @@ int MakeDriverInfo() {//创建磁盘分区信息, 1->A, 2->B, 3->C,..., 26->Z
     
     CPacket pack(1, (BYTE*)result.c_str(), result.size());
     Dump((BYTE*)pack.Data(), pack.Size());
-    //CServerSocket::getInstance()->Send(pack);
+    CServerSocket::getInstance()->Send(pack);
     //CServerSocket::getInstance()->Send(CPacket(1, (BYTE*)result.c_str(), result.size()));
     return 0;
 }

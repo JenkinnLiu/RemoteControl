@@ -144,7 +144,7 @@ public:
         }
         return m_instance;
     }
-    bool InitSocket(const std::string& strIPAdress) {//客户端需要输入IP地址
+    bool InitSocket(int nIP, int nPort) {//客户端需要输入IP地址
 		if (m_sock != INVALID_SOCKET) CloseSocket();//如果已经连接，先关闭socket再重开一个
 		m_sock = socket(PF_INET, SOCK_STREAM, 0);//IPV4, TCP,客户端需要重新建立socket
         if (m_sock == -1) return false;
@@ -153,14 +153,20 @@ public:
         serv_adr.sin_family = AF_INET;//IPV4地址族
 		//如果inet_addr报C4996, 用inet_pton, inet_addr是过时的函数，或者在属性，预处理器定义中加入WINSOCK_DEPRECATED_NO_WARNINGS
         //serv_adr.sin_addr.s_addr = inet_addr(strIPAdress.c_str());//在所有IP上监听
-		int ret = inet_pton(AF_INET, strIPAdress.c_str(), &serv_adr.sin_addr.s_addr);
+        //int ret = inet_pton(AF_INET, htol(nIP), &serv_adr.sin_addr.s_addr);
+
+        //使用 sprintf_s 函数将整数形式的 IP 地址 nIP 转换为字符串形式，并存储在 strIP 中。
+        //nIP >> 24、nIP >> 16、nIP >> 8 和 nIP 分别提取 IP 地址的四个字节，并使用 & 0xFF 确保每个字节的值在 0 到 255 之间。
+        char strIP[INET_ADDRSTRLEN];
+        sprintf_s(strIP, "%d.%d.%d.%d", (nIP >> 24) & 0xFF, (nIP >> 16) & 0xFF, (nIP >> 8) & 0xFF, nIP & 0xFF);
+        int ret = inet_pton(AF_INET, strIP, &serv_adr.sin_addr.s_addr);
         if (ret == 1) {
 			TRACE("inet_pton success!\r\n");
         }
         else {
             TRACE("inet_pton failed, %d %s\r\n", WSAGetLastError(), GetErrInfo(WSAGetLastError()).c_str());
         }
-        serv_adr.sin_port = htons(9527);
+        serv_adr.sin_port = htons(nPort);
         if (serv_adr.sin_addr.s_addr == INADDR_NONE) {
 			AfxMessageBox("无效的IP地址！");
             return false;
@@ -178,6 +184,8 @@ public:
         if (m_sock == -1) return -1;
         //char buffer[1024];
         //char* buffer = new char[BUFFER_SIZE];
+        //服务端接收是单个命令，但是服务端会发送很大的包，所以接收短命令服务端只需要开一个new char就行
+        //客户端的话要用vector接收大的数据包
 		char* buffer = m_buffer.data();//用vector的data函数返回指向数组的指针，不用担心内存泄漏
         memset(buffer, 0, BUFFER_SIZE);
         size_t index = 0;//未处理数据的长度

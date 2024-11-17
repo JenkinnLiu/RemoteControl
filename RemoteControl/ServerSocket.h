@@ -169,6 +169,8 @@ public:
         if (m_client == -1) return -1;
         //char buffer[1024];
         char* buffer = new char[BUFFER_SIZE];
+        //服务端接收是单个命令，但是服务端会发送很大的包，所以接收短命令服务端只需要开一个new char就行
+        //客户端的话要用vector接收大的数据包
         if (buffer == NULL) {
 			TRACE("内存不足，分配失败！\r\n");
             return -2;
