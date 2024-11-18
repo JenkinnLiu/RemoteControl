@@ -20,6 +20,7 @@ public:
 	protected:
 	virtual void DoDataExchange(CDataExchange* pDX);	// DDX/DDV 支持
 private:
+	void LoadFileInfo();
 	CString GetPath(HTREEITEM hTree);//获取路径,让这个函数可以使用m_Tree
 	void DeleteTreeChildrenItem(HTREEITEM hTree);//删除树的子节点
 	//1. 查看磁盘分区
@@ -48,4 +49,9 @@ public:
 	afx_msg void OnBnClickedBtnFileinfo();
 	CTreeCtrl m_Tree;
 	afx_msg void OnNMDblclkTreeDir(NMHDR* pNMHDR, LRESULT* pResult);
+	afx_msg void OnNMClickTreeDir(NMHDR* pNMHDR, LRESULT* pResult);
+	// 显示文件
+	CListCtrl m_LIst;
+	afx_msg void OnNMRClickTreeDir(NMHDR* pNMHDR, LRESULT* pResult);
+	afx_msg void OnNMRClickListFile(NMHDR* pNMHDR, LRESULT* pResult);
 };

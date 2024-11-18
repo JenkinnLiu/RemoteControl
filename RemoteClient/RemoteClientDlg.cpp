@@ -65,6 +65,7 @@ void CRemoteClientDlg::DoDataExchange(CDataExchange* pDX)
 	DDX_IPAddress(pDX, IDC_IPADDRESS_SERV, m_server_address);
 	DDX_Text(pDX, IDC_EDIT_PORT, m_nPort);
 	DDX_Control(pDX, IDC_TREE_DIR, m_Tree);
+	DDX_Control(pDX, IDC_LIST_FILE, m_LIst);
 }
 
 int CRemoteClientDlg::SendCommandPacket(int nCmd, bool bAutoClose, BYTE* pData, size_t nLength)//发送命令数据cmd
@@ -94,6 +95,9 @@ BEGIN_MESSAGE_MAP(CRemoteClientDlg, CDialogEx)
 	ON_BN_CLICKED(IDC_BTN_TEST, &CRemoteClientDlg::OnBnClickedBtnTest)
 	ON_BN_CLICKED(IDC_BTN_FILEINFO, &CRemoteClientDlg::OnBnClickedBtnFileinfo)
 	ON_NOTIFY(NM_DBLCLK, IDC_TREE_DIR, &CRemoteClientDlg::OnNMDblclkTreeDir)
+	ON_NOTIFY(NM_CLICK, IDC_TREE_DIR, &CRemoteClientDlg::OnNMClickTreeDir)
+	ON_NOTIFY(NM_RCLICK, IDC_TREE_DIR, &CRemoteClientDlg::OnNMRClickTreeDir)
+	ON_NOTIFY(NM_RCLICK, IDC_LIST_FILE, &CRemoteClientDlg::OnNMRClickListFile)
 END_MESSAGE_MAP()
 
 
@@ -221,6 +225,48 @@ void CRemoteClientDlg::OnBnClickedBtnFileinfo()
 	}
 }
 
+void CRemoteClientDlg::LoadFileInfo(){
+	CPoint ptMouse;
+	GetCursorPos(&ptMouse);//获取鼠标位置
+	m_Tree.ScreenToClient(&ptMouse);//将鼠标位置转换为树控件的客户区坐标
+	HTREEITEM hTreeSelected = m_Tree.HitTest(ptMouse, 0);//获取鼠标所在的树控件的节点
+	if (hTreeSelected == NULL)
+		return;
+	if (m_Tree.GetChildItem(hTreeSelected) == NULL)
+		return;//如果没有子节点,即双击的是文件，直接返回
+	DeleteTreeChildrenItem(hTreeSelected);//删除树控件的子节点,避免多次双击重复添加
+	m_LIst.DeleteAllItems();//清空文件列表
+	CString strPath = GetPath(hTreeSelected);
+	int nCmd = SendCommandPacket(2, false, (BYTE*)(LPCSTR)strPath, strPath.GetLength());//查看指定目录下的文件
+	TRACE("执行SendCommandPacket2查看指定目录下的文件 ret:%d\r\n", nCmd);
+	PFILEINFO pInfo = (PFILEINFO)CClientSocket::getInstance()->GetPacket().strData.c_str();
+	CClientSocket* pClient = CClientSocket::getInstance();
+	while (pInfo->HasNext) {//如果没有下一个文件
+		TRACE("[%s] isdir %d\r\n", pInfo->szFileName, pInfo->IsDirectory);
+		if (pInfo->IsDirectory) {
+			if (CString(pInfo->szFileName) == "." || (CString(pInfo->szFileName) == "..")) {
+				//如果是当前目录或者上级目录，不添加到树控件,避免无限递归死循环
+				int cmd = pClient->DealCommand();//接收服务器数据
+				TRACE("客户端接收服务器端文件目录,ack:%d\r\n", cmd);
+				if (cmd < 0) break;
+				pInfo = (PFILEINFO)CClientSocket::getInstance()->GetPacket().strData.c_str();
+				continue;
+			}
+			HTREEITEM hTemp = m_Tree.InsertItem(pInfo->szFileName, hTreeSelected, TVI_LAST);//插入文件pInfo->szFileName, hTreeSelected表示父节点，TVI_LAST表示最后一个节点
+			m_Tree.InsertItem("", hTemp, TVI_LAST);//插入一个空节点
+		}
+		else {//如果是文件
+			m_LIst.InsertItem(0, pInfo->szFileName);//插入文件名，0表示插入到第一个位置
+		}
+		int cmd = pClient->DealCommand();//接收服务器数据
+		TRACE("客户端接收服务器端文件目录,ack:%d\r\n", cmd);
+		if (cmd < 0) break;
+		pInfo = (PFILEINFO)CClientSocket::getInstance()->GetPacket().strData.c_str();
+	}
+
+	pClient->CloseSocket();
+}
+
 CString CRemoteClientDlg::GetPath(HTREEITEM hTree) {//获取路径
 	CString strRet, strTmp;
 	do {
@@ -244,41 +290,53 @@ void CRemoteClientDlg::OnNMDblclkTreeDir(NMHDR* pNMHDR, LRESULT* pResult)//双�
 {
 	// TODO: 在此添加控件通知处理程序代码
 	*pResult = 0;
-	CPoint ptMouse;
+	LoadFileInfo();
+}
+
+
+void CRemoteClientDlg::OnNMClickTreeDir(NMHDR* pNMHDR, LRESULT* pResult)
+{
+	// TODO: 在此添加控件通知处理程序代码
+	*pResult = 0;
+	LoadFileInfo();
+}
+
+
+void CRemoteClientDlg::OnNMRClickTreeDir(NMHDR* pNMHDR, LRESULT* pResult)
+{
+	// TODO: 在此添加控件通知处理程序代码
+	*pResult = 0;
+	CPoint ptMouse, ptLIst;
 	GetCursorPos(&ptMouse);//获取鼠标位置
-	m_Tree.ScreenToClient(&ptMouse);//将鼠标位置转换为树控件的客户区坐标
-	HTREEITEM hTreeSelected = m_Tree.HitTest(ptMouse, 0);//获取鼠标所在的树控件的节点
-	if (hTreeSelected == NULL)
-		return; 
-	if (m_Tree.GetChildItem(hTreeSelected) == NULL) 
-		return;//如果没有子节点,即双击的是文件，直接返回
-	DeleteTreeChildrenItem(hTreeSelected);//删除树控件的子节点,避免多次双击重复添加
-	CString strPath = GetPath(hTreeSelected);
-	int nCmd = SendCommandPacket(2, false, (BYTE*)(LPCSTR)strPath, strPath.GetLength());//查看指定目录下的文件
-	TRACE("执行SendCommandPacket2查看指定目录下的文件 ret:%d\r\n", nCmd);
-	PFILEINFO pInfo = (PFILEINFO)CClientSocket::getInstance()->GetPacket().strData.c_str();
-	CClientSocket* pClient = CClientSocket::getInstance();
-	while (pInfo->HasNext) {//如果没有下一个文件
-		TRACE("[%s] isdir %d\r\n", pInfo->szFileName, pInfo->IsDirectory);
-		if (pInfo->IsDirectory) {
-			if (CString(pInfo->szFileName) == "." || (CString(pInfo->szFileName) == "..")){
-				//如果是当前目录或者上级目录，不添加到树控件,避免无限递归死循环
-				int cmd = pClient->DealCommand();//接收服务器数据
-				TRACE("客户端接收服务器端文件目录,ack:%d\r\n", cmd);
-				if (cmd < 0) break;
-				pInfo = (PFILEINFO)CClientSocket::getInstance()->GetPacket().Data();
-				continue;
-			}
-		}
-		HTREEITEM hTemp = m_Tree.InsertItem(pInfo->szFileName, hTreeSelected, TVI_LAST);//插入文件pInfo->szFileName, hTreeSelected表示父节点，TVI_LAST表示最后一个节点
-		if (pInfo->IsDirectory) {
-			m_Tree.InsertItem("", hTemp, TVI_LAST);//插入一个空节点
-		}
-		int cmd = pClient->DealCommand();//接收服务器数据
-		TRACE("客户端接收服务器端文件目录,ack:%d\r\n", cmd);
-		if (cmd < 0) break;
-		pInfo = (PFILEINFO)CClientSocket::getInstance()->GetPacket().strData.c_str();
+	m_LIst.ScreenToClient(&ptMouse);//将鼠标位置转换为列表控件的客户区坐标
+	int ListSelected = m_LIst.HitTest(ptLIst);//获取鼠标所在的列表控件的节点
+	if (ListSelected < 0)
+		return;
+	CMenu menu;
+	menu.LoadMenu(IDR_MENU_RCLICK);//加载菜单资源
+	CMenu* pPupup = menu.GetSubMenu(0);//获取弹出菜单
+	if (pPupup != NULL) {
+		pPupup->TrackPopupMenu(TPM_LEFTALIGN | TPM_RIGHTBUTTON, ptMouse.x, ptMouse.y, this);//弹出菜单，左对齐，用右键弹出， ptMouse.x, ptMouse.y是鼠标位置
 	}
-	
-	pClient->CloseSocket();
+}
+
+
+void CRemoteClientDlg::OnNMRClickListFile(NMHDR* pNMHDR, LRESULT* pResult)
+{
+	LPNMITEMACTIVATE pNMItemActivate = reinterpret_cast<LPNMITEMACTIVATE>(pNMHDR);
+	// TODO: 在此添加控件通知处理程序代码
+	*pResult = 0;
+	CPoint ptMouse, ptLIst;
+	GetCursorPos(&ptMouse);//获取鼠标位置
+	ptLIst = ptMouse;//初始化列表控件的鼠标位置
+	m_LIst.ScreenToClient(&ptMouse);//将鼠标位置转换为列表控件的客户区坐标
+	int ListSelected = m_LIst.HitTest(ptLIst);//获取鼠标所在的列表控件的节点
+	if (ListSelected < 0)
+		return;
+	CMenu menu;
+	menu.LoadMenu(IDR_MENU_RCLICK);//加载菜单资源
+	CMenu* pPupup = menu.GetSubMenu(0);//获取弹出菜单
+	if (pPupup != NULL) {
+		pPupup->TrackPopupMenu(TPM_LEFTALIGN | TPM_RIGHTBUTTON, ptMouse.x, ptMouse.y, this);//弹出菜单，左对齐，用右键弹出， ptMouse.x, ptMouse.y是鼠标位置
+	}
 }
