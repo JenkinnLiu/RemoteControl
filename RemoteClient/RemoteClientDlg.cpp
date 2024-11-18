@@ -67,7 +67,7 @@ void CRemoteClientDlg::DoDataExchange(CDataExchange* pDX)
 	DDX_Control(pDX, IDC_TREE_DIR, m_Tree);
 }
 
-int CRemoteClientDlg::SendCommandPacket(int nCmd, BYTE* pData, size_t nLength)//发送命令数据cmd
+int CRemoteClientDlg::SendCommandPacket(int nCmd, bool bAutoClose, BYTE* pData, size_t nLength)//发送命令数据cmd
 {	
 	UpdateData();//取控件的值（IP地址和端口）
 	/*atoi((LPCTSTR)m_nPort);*///LPCTSTR是一个指向字符的指针，atoi是将字符串转换为整数
@@ -79,10 +79,11 @@ int CRemoteClientDlg::SendCommandPacket(int nCmd, BYTE* pData, size_t nLength)//
 	}
 	CPacket pack(nCmd, pData, nLength);
 	ret = pClient->Send(pack);//向服务器发送测试数据
-	TRACE("Send ret :%d， 1代表向服务器发送成功\r\n", ret);
+	TRACE("SendCommandPacket函数：Send ret :%d， 1代表向服务器发送成功\r\n", ret);
 	int cmd = pClient->DealCommand();//接收测试服务器数据
-	TRACE("ack:%d\r\n", cmd);
-	pClient->CloseSocket();
+	TRACE("SendCommandPacket函数：ack:%d\r\n", cmd);
+	if(bAutoClose)//如果设置自动关闭套接字
+		pClient->CloseSocket();
 	return cmd;
 }
 
@@ -92,6 +93,7 @@ BEGIN_MESSAGE_MAP(CRemoteClientDlg, CDialogEx)
 	ON_WM_QUERYDRAGICON()
 	ON_BN_CLICKED(IDC_BTN_TEST, &CRemoteClientDlg::OnBnClickedBtnTest)
 	ON_BN_CLICKED(IDC_BTN_FILEINFO, &CRemoteClientDlg::OnBnClickedBtnFileinfo)
+	ON_NOTIFY(NM_DBLCLK, IDC_TREE_DIR, &CRemoteClientDlg::OnNMDblclkTreeDir)
 END_MESSAGE_MAP()
 
 
@@ -209,11 +211,74 @@ void CRemoteClientDlg::OnBnClickedBtnFileinfo()
 	for (size_t i = 0; i < drivers.size(); i ++) {
 		if (drivers[i] == ',') {
 			dr += ":";//将盘符后面的\0去掉,加分好
-			m_Tree.InsertItem(dr.c_str(), TVI_ROOT, TVI_LAST);//插入可用盘符, TVI_ROOT表示根节点，TVI_LAST表示最后一个节点,表示追加到根目录
+			HTREEITEM hTemp = m_Tree.InsertItem(dr.c_str(), TVI_ROOT, TVI_LAST);//插入可用盘符, TVI_ROOT表示根节点，TVI_LAST表示最后一个节点,表示追加到根目录
+			m_Tree.InsertItem(NULL, hTemp, TVI_LAST);// 插入一个空节点,为的是可以双击树控件，获取文件信息
 			//"C:" "D:" "E:"
 			dr.clear();
 			continue;
 		}
 		dr += drivers[i];
 	}
+}
+
+CString CRemoteClientDlg::GetPath(HTREEITEM hTree) {//获取路径
+	CString strRet, strTmp;
+	do {
+		strTmp = m_Tree.GetItemText(hTree);//获取树控件的节点文本
+		strRet = strTmp + "\\" + strRet;//将节点文本拼接起来
+		hTree = m_Tree.GetParentItem(hTree);//获取父节点,一直拿到父节点为空
+	} while (hTree != NULL);
+	return strRet;
+}
+
+void CRemoteClientDlg::DeleteTreeChildrenItem(HTREEITEM hTree){
+	HTREEITEM hSub = NULL;
+	do {
+		hSub = m_Tree.GetChildItem(hTree);
+		if(hSub != NULL) m_Tree.DeleteItem(hSub);
+	} while (hSub != NULL);
+}
+
+
+void CRemoteClientDlg::OnNMDblclkTreeDir(NMHDR* pNMHDR, LRESULT* pResult)//双击树控件，获取文件信息
+{
+	// TODO: 在此添加控件通知处理程序代码
+	*pResult = 0;
+	CPoint ptMouse;
+	GetCursorPos(&ptMouse);//获取鼠标位置
+	m_Tree.ScreenToClient(&ptMouse);//将鼠标位置转换为树控件的客户区坐标
+	HTREEITEM hTreeSelected = m_Tree.HitTest(ptMouse, 0);//获取鼠标所在的树控件的节点
+	if (hTreeSelected == NULL)
+		return; 
+	if (m_Tree.GetChildItem(hTreeSelected) == NULL) 
+		return;//如果没有子节点,即双击的是文件，直接返回
+	DeleteTreeChildrenItem(hTreeSelected);//删除树控件的子节点,避免多次双击重复添加
+	CString strPath = GetPath(hTreeSelected);
+	int nCmd = SendCommandPacket(2, false, (BYTE*)(LPCSTR)strPath, strPath.GetLength());//查看指定目录下的文件
+	TRACE("执行SendCommandPacket2查看指定目录下的文件 ret:%d\r\n", nCmd);
+	PFILEINFO pInfo = (PFILEINFO)CClientSocket::getInstance()->GetPacket().strData.c_str();
+	CClientSocket* pClient = CClientSocket::getInstance();
+	while (pInfo->HasNext) {//如果没有下一个文件
+		TRACE("[%s] isdir %d\r\n", pInfo->szFileName, pInfo->IsDirectory);
+		if (pInfo->IsDirectory) {
+			if (CString(pInfo->szFileName) == "." || (CString(pInfo->szFileName) == "..")){
+				//如果是当前目录或者上级目录，不添加到树控件,避免无限递归死循环
+				int cmd = pClient->DealCommand();//接收服务器数据
+				TRACE("客户端接收服务器端文件目录,ack:%d\r\n", cmd);
+				if (cmd < 0) break;
+				pInfo = (PFILEINFO)CClientSocket::getInstance()->GetPacket().Data();
+				continue;
+			}
+		}
+		HTREEITEM hTemp = m_Tree.InsertItem(pInfo->szFileName, hTreeSelected, TVI_LAST);//插入文件pInfo->szFileName, hTreeSelected表示父节点，TVI_LAST表示最后一个节点
+		if (pInfo->IsDirectory) {
+			m_Tree.InsertItem("", hTemp, TVI_LAST);//插入一个空节点
+		}
+		int cmd = pClient->DealCommand();//接收服务器数据
+		TRACE("客户端接收服务器端文件目录,ack:%d\r\n", cmd);
+		if (cmd < 0) break;
+		pInfo = (PFILEINFO)CClientSocket::getInstance()->GetPacket().strData.c_str();
+	}
+	
+	pClient->CloseSocket();
 }

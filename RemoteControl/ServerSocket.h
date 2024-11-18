@@ -1,7 +1,7 @@
 #pragma once
 #include "framework.h"
 #include "pch.h"
-
+void Dump(BYTE* pData, size_t nSize);
 #pragma pack(push)
 #pragma pack(1)
 
@@ -129,6 +129,19 @@ typedef struct MouseEvent {
 
 }MOUSEEV, *PMOUSEEV;
 
+typedef struct file_info {
+    file_info() {//结构体构造函数
+        IsInvalid = 0;
+        IsDirectory = -1;
+        HasNext = 1;
+        memset(szFileName, 0, sizeof szFileName);
+    }
+    BOOL IsInvalid;//是否为无效目录
+    BOOL IsDirectory;//是否为目录： 0 否， 1 是
+    BOOL HasNext;//是否还有后续： 0 没有， 1 有
+    char szFileName[256];//文件名
+}FILEINFO, * PFILEINFO;
+
 class CServerSocket
 {
 public:
@@ -206,6 +219,7 @@ public:
     }
     bool Send(CPacket& pack) {
         if (m_client == -1) return false;
+        Dump((BYTE*)pack.Data(), pack.Size());
         return send(m_client, pack.Data(), pack.Size(), 0) > 0;
     }
     bool GetFilePath(std::string& strPath) {
