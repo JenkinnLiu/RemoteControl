@@ -20,6 +20,7 @@ public:
 	protected:
 	virtual void DoDataExchange(CDataExchange* pDX);	// DDX/DDV 支持
 private:
+	void LoadFileCurrent();//加载当前目录下的文件
 	void LoadFileInfo();
 	CString GetPath(HTREEITEM hTree);//获取路径,让这个函数可以使用m_Tree
 	void DeleteTreeChildrenItem(HTREEITEM hTree);//删除树的子节点
@@ -27,6 +28,12 @@ private:
 	//2. 查看指定目录下的文件
 	//3. 打开文件
 	//4. 下载文件
+	//5. 鼠标操作
+	// 6. 发送屏幕内容
+	// 7. 锁机
+	// 8. 解锁
+	// 9. 删除文件
+	// 1981. 测试连接
 	//返回值是命令号cmd, 如果小于0是错误
 	int SendCommandPacket(int nCmd, bool bAutoClose = true, BYTE* pData = NULL, size_t nLength = 0);
 	
