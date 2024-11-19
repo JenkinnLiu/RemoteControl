@@ -110,6 +110,7 @@ int DownloadFile() {
     errno_t err = fopen_s(&pFile, strPath.c_str(), "rb");//文本文件按二进制方式读
     if (err != 0) {
         CPacket pack(4, (BYTE*)&data, 8);//打开失败，传个NULL结束
+        TRACE("打开文件失败！！\r\n");
         CServerSocket::getInstance()->Send(pack);
         return -1;
     }
@@ -117,12 +118,14 @@ int DownloadFile() {
         fseek(pFile, 0, SEEK_END);//拿一个文件的长度
         data = _ftelli64(pFile);
         CPacket head(4, (BYTE*)&data, 8);//发送文件长度
+		CServerSocket::getInstance()->Send(head);//发送文件
         fseek(pFile, 0, SEEK_SET);
         char buffer[1024] = "";
         size_t rlen = 0;
         do {
             rlen = fread(buffer, 1, 1024, pFile);//一次读1字节，读1024次
             CPacket pack(4, (BYTE*)buffer, rlen);
+			CServerSocket::getInstance()->Send(pack);
         } while (rlen >= 1024);
         fclose(pFile);//别忘了关文件
     }
