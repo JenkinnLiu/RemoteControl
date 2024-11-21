@@ -30,6 +30,9 @@ public:
 	CImage& GetImage() {
 		return m_image;
 	}
+	void SetImageStatus(bool isFull = false) {
+		m_isFull = isFull;
+	}
 private:
 	CImage m_image;//图片缓存
 	bool m_isFull;//缓存是否有数据，true,有数据，false,无数据

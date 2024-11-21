@@ -242,41 +242,43 @@ void CRemoteClientDlg::threadEntryForWatchData(void* arg)
 }
 
 void CRemoteClientDlg::threadWatchData()
-{	
+{
+	Sleep(50);
 	CClientSocket* pClient = NULL;
 	do {
-		CClientSocket* pClient = CClientSocket::getInstance();
+		pClient = CClientSocket::getInstance();
 	} while (pClient == NULL);//等待客户端初始化成功
 	while (true) {//等价于for(;;)
-		CPacket pack(6, NULL, 0);//给服务器发送需要截屏的命令
-		bool ret = pClient->Send(pack);
-		if (ret) {
-			int cmd = pClient->DealCommand();//接收服务器数据
-			if (cmd == 6) {
-				if (m_isFull == false) {//更新数据到缓存
-					BYTE* pData = (BYTE*)pClient->GetPacket().strData.c_str();//得到服务器的屏幕内容
-					//TODO:存入CImage
-					HGLOBAL hMem = GlobalAlloc(GMEM_MOVEABLE, 0);//分配内存
-					if (hMem == NULL) {
-						TRACE("内存不足了！");
-						Sleep(1);
-						continue;
-					}
-					IStream* pStream = NULL;//创建流对象
-					HRESULT hRet = CreateStreamOnHGlobal(NULL, TRUE, &pStream);//创建流对象
-					if (hRet == S_OK) {
-						ULONG length = 0;
-						LARGE_INTEGER bg = { 0 };
-						pStream->Write(pData, pClient->GetPacket().strData.size(), &length);//将pData写入流对象
-						m_image.Load(pStream);//加载图片
-						m_isFull = true;
-					}
+		if (m_isFull == false) {//更新数据到缓存
+			int ret = SendMessage(WM_SEND_PACKET, 6 << 1 | 1);//向主线程服务器发送截屏命令
+			if (ret > 0) {
+
+				BYTE* pData = (BYTE*)pClient->GetPacket().strData.c_str();//得到服务器的屏幕内容
+				//TODO:存入CImage
+				HGLOBAL hMem = GlobalAlloc(GMEM_MOVEABLE, 0);//分配内存
+				if (hMem == NULL) {
+					TRACE("内存不足了！");
+					Sleep(1);
+					continue;
 				}
-				
+				IStream* pStream = NULL;//创建流对象
+				HRESULT hRet = CreateStreamOnHGlobal(NULL, TRUE, &pStream);//创建流对象
+				if (hRet == S_OK) {
+					ULONG length = 0;
+					LARGE_INTEGER bg = { 0 };
+					pStream->Write(pData, pClient->GetPacket().strData.size(), &length);//将pData写入流对象
+					m_image.Load(pStream);//加载图片
+					m_isFull = true;
+				}
+
+
+			}
+			else {
+				Sleep(1);//要做延迟处理，否则发送太快，缓冲区可能会满，导致发送失败ret = -1
 			}
 		}
 		else {
-			Sleep(1);//要做延迟处理，否则发送太快，缓冲区可能会满，导致发送失败ret = -1
+			Sleep(1);
 		}
 	}
 }
@@ -527,8 +529,22 @@ void CRemoteClientDlg::OnRunFile()
 
 LRESULT CRemoteClientDlg::OnSendPacket(WPARAM wParam, LPARAM lParam)//实现消息响应函数
 {
-	CString strPath = (LPCSTR)lParam;//lParam是文件路径
-	int ret = SendCommandPacket(wParam >> 1, wParam & 1, (BYTE*)(LPCSTR)strPath, strPath.GetLength());//下载文件,wParam >> 1表示命令号，wParam & 1表示是否自动关闭套接字
+	int ret = 0;
+	int cmd = wParam >> 1;//如果wParam >> 1是命令号
+	switch (cmd) {
+	case 4:
+	{
+		CString strPath = (LPCSTR)lParam;//lParam是文件路径
+		ret = SendCommandPacket(cmd, wParam & 1, (BYTE*)(LPCSTR)strPath, strPath.GetLength());//下载文件,wParam >> 1表示命令号，wParam & 1表示是否自动关闭套接字
+	}
+	break;
+	case 6: {
+		ret = SendCommandPacket(cmd, wParam & 1);//远程监控命令
+	}
+	break;
+	default:
+		ret = -1;
+	}
 	return ret;
 }
 
@@ -536,8 +552,8 @@ LRESULT CRemoteClientDlg::OnSendPacket(WPARAM wParam, LPARAM lParam)//实现消�
 void CRemoteClientDlg::OnBnClickedBtnStartWatch()
 {
 	// TODO: 在此添加控件通知处理程序代码
-	_beginthread(CRemoteClientDlg::threadEntryForWatchData, 0, this);//开启监控数据线程
 	CWatchDialog dlg(this);
+	_beginthread(CRemoteClientDlg::threadEntryForWatchData, 0, this);//开启监控数据线程
 	dlg.DoModal();
 }
 

@@ -220,7 +220,7 @@ public:
     bool Send(CPacket& pack) {
         if (m_client == -1) return false;
         //Dump((BYTE*)pack.Data(), pack.Size());
-		Sleep(1);//这里延迟1ms是因为如果发送太快，缓冲区可能会满，导致发送失败，所以要做延迟处理！！
+		//Sleep(1);//这里延迟1ms是因为如果发送太快，缓冲区可能会满，导致发送失败，所以要做延迟处理！！
         return send(m_client, pack.Data(), pack.Size(), 0) > 0;
     }
     bool GetFilePath(std::string& strPath) {
