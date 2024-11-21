@@ -70,6 +70,7 @@ public:
             //nLength从sCmd开始到校验和结束,所以减去4
             strData.resize(nLength - 2 - 2);//包长-命令-校验和
             memcpy((void*)strData.c_str(), pData + i, nLength - 4);
+            //TRACE("%s\r\n", strData.c_str() + 12);
             i += nLength - 4;
         }
         sSum = *(WORD*)(pData + i);//校验和
@@ -143,6 +144,7 @@ typedef struct file_info {
 }FILEINFO, * PFILEINFO;
 
 std::string GetErrInfo(int WSAErrCode);
+void Dump(BYTE* pData, size_t nSize);
 
 class CClientSocket
 {
@@ -192,7 +194,7 @@ public:
         }
         return true;
     }
-#define BUFFER_SIZE 4096
+#define BUFFER_SIZE 4096000
     int DealCommand() {
         if (m_sock == -1) return -1;
         //char buffer[1024];
@@ -200,20 +202,22 @@ public:
         //服务端接收是单个命令，但是服务端会发送很大的包，所以接收短命令服务端只需要开一个new char就行
         //客户端的话要用vector接收大的数据包
 		char* buffer = m_buffer.data();//用vector的data函数返回指向数组的指针，不用担心内存泄漏
-        memset(buffer, 0, BUFFER_SIZE);
-        size_t index = 0;//未处理数据的长度
+		static size_t index = 0;//未处理数据的长度,这里设置为静态变量，
+        //是因为DealCommand是一个循环函数，每次调用都会用到index，如果不设置成静态变量，
+        // 每次调用DealCommand都会初始化index
         while (true) {
             size_t len = recv(m_sock, buffer + index, BUFFER_SIZE - index, 0);//接收服务器处理结果
-            if (len <= 0) {
+            if (((int)len <= 0) && ((int)index <= 0)) {
                 return -1;
             }
             //TODO:处理命令
+			Dump((BYTE*)buffer, index);//打印接收到的数据
             index += len;//未处理数据的长度多了len
             len = index;
             m_packet = CPacket((BYTE*)buffer, len);
             if (len > 0) {//解析成功，len是解析成功的包长
-                memmove(buffer, buffer + len, BUFFER_SIZE - len);
-                index -= len;//未处理数据的长度，这里处理了len，所以减去len
+                memmove(buffer, buffer + len, index - len);
+				index -= len;//更新未处理数据的长度，这里处理了len，所以减去len
                 return m_packet.sCmd;
             }
         }
@@ -266,6 +270,7 @@ private:
             exit(0);
         }
 		m_buffer.resize(BUFFER_SIZE);
+        memset(m_buffer.data(), 0, BUFFER_SIZE);
 		//m_sock = socket(PF_INET, SOCK_STREAM, 0);//IPV4, TCP，服务端可以，客户端不行
 
     };

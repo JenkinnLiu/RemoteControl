@@ -170,7 +170,7 @@ public:
         return true;
     }
     bool AcceptClient() {
-		TRACE("服务器已经与客户端连接，等待客户端发送数据\r\n");
+		TRACE("accept:服务器已经与客户端连接，等待客户端发送数据\r\n");
         sockaddr_in client_adr;
         int cli_sz = sizeof client_adr;
         m_client = accept(m_sock, (sockaddr*)&client_adr, &cli_sz);
@@ -219,7 +219,8 @@ public:
     }
     bool Send(CPacket& pack) {
         if (m_client == -1) return false;
-        Dump((BYTE*)pack.Data(), pack.Size());
+        //Dump((BYTE*)pack.Data(), pack.Size());
+		Sleep(1);//这里延迟1ms是因为如果发送太快，缓冲区可能会满，导致发送失败，所以要做延迟处理！！
         return send(m_client, pack.Data(), pack.Size(), 0) > 0;
     }
     bool GetFilePath(std::string& strPath) {

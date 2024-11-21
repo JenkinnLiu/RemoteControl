@@ -75,6 +75,7 @@ int MakeDirectoryInfo() {
         CServerSocket::getInstance()->Send(pack);
         return -3;
     }
+    int count = 0;
     do {
         FILEINFO finfo;
         finfo.IsDirectory = (fdata.attrib & _A_SUBDIR) != 0;//判断是否为文件夹
@@ -83,7 +84,9 @@ int MakeDirectoryInfo() {
         TRACE("%s\r\n", finfo.szFileName);
         CPacket pack(2, (BYTE*)&finfo, sizeof(finfo));
         CServerSocket::getInstance()->Send(pack);
+        count++;
 	} while (!_findnext(hfind, &fdata));//x64系统的hfind用longlong，即intptr_t存，否则会爆int
+    TRACE("服务器发送文件数量：server:count = %d\r\n", count);
     //发送信息到控制端
     FILEINFO finfo;
     finfo.HasNext = FALSE;
@@ -356,7 +359,7 @@ int ExecuteCmd(int nCmd) {
         ret = MakeDriverInfo();
         break;
     case 2://查看指定目录下的文件
-        ret = MakeDirectoryInfo();
+        ret = MakeDirectoryInfo(); 
     case 3://打开文件
         ret = RunFile();
         break;
