@@ -174,6 +174,7 @@ int MouseEvent() {
         default:
             break;
         }
+        TRACE("鼠标操作：%08X x:%d y:%d\r\n", nflags, mouse.ptXY.x, mouse.ptXY.y);
         switch (nflags){
 			//mouse_event()用于模拟鼠标操作
             case 0x21://左键双击，先执行双击的两个mouse_event,再执行单击的两个mouse_event

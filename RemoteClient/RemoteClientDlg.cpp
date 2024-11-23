@@ -538,6 +538,10 @@ LRESULT CRemoteClientDlg::OnSendPacket(WPARAM wParam, LPARAM lParam)//实现消�
 		ret = SendCommandPacket(cmd, wParam & 1, (BYTE*)(LPCSTR)strPath, strPath.GetLength());//下载文件,wParam >> 1表示命令号，wParam & 1表示是否自动关闭套接字
 	}
 	break;
+	case 5: {//鼠标操作
+		ret = SendCommandPacket(cmd, wParam & 1, (BYTE*)lParam, sizeof MOUSEEV);
+	}
+	break;
 	case 6: {
 		ret = SendCommandPacket(cmd, wParam & 1);//远程监控命令
 	}
