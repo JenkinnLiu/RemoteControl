@@ -273,6 +273,8 @@ unsigned threadId = 0;//线程ID
 unsigned __stdcall threadLockDlg(void* arg) {//线程函数
     dlg.Create(IDD_DIALOG_INFO, NULL);//创建窗口
     dlg.ShowWindow(SW_SHOW);//显示窗口
+
+
     //dlg.SetWindowPos(&dlg.wndTopMost, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE);//窗口置顶
     //获取设备屏幕分辨率并将该窗口置于右下角
     int nWidth = GetSystemMetrics(SM_CXSCREEN);//获取屏幕宽度
@@ -306,6 +308,7 @@ unsigned __stdcall threadLockDlg(void* arg) {//线程函数
         }
     }
     dlg.DestroyWindow();//销毁窗口
+    ClipCursor(NULL);//限制鼠标只能在窗口内活动
     ShowCursor(true);
     ::ShowWindow(::FindWindow(_T("Shell_TrayWnd"), NULL), SW_SHOW);//重新显示任务栏
 

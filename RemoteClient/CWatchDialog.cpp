@@ -40,6 +40,8 @@ BEGIN_MESSAGE_MAP(CWatchDialog, CDialog)
 	ON_WM_RBUTTONUP()
 	ON_WM_MOUSEMOVE()
 	ON_STN_CLICKED(IDC_WATCH, &CWatchDialog::OnStnClickedWatch)
+	ON_BN_CLICKED(IDC_BTN_LOCK, &CWatchDialog::OnBnClickedBtnLock)
+	ON_BN_CLICKED(IDC_BTN_UNLOCK, &CWatchDialog::OnBnClickedBtnUnlock)
 END_MESSAGE_MAP()
 
 
@@ -253,4 +255,18 @@ void CWatchDialog::OnOK()
 {
 
 	//CDialog::OnOK();//让回车键失效
+}
+
+
+void CWatchDialog::OnBnClickedBtnLock()
+{
+	CRemoteClientDlg* pParent = (CRemoteClientDlg*)GetParent();
+	pParent->SendMessage(WM_SEND_PACKET, 7 << 1 | 1);//向主线程发送锁机操作
+}
+
+
+void CWatchDialog::OnBnClickedBtnUnlock()
+{
+	CRemoteClientDlg* pParent = (CRemoteClientDlg*)GetParent();
+	pParent->SendMessage(WM_SEND_PACKET, 8 << 1 | 1);//向主线程发送锁机操作
 }
