@@ -279,7 +279,7 @@ unsigned __stdcall threadLockDlg(void* arg) {//线程函数
     //获取设备屏幕分辨率并将该窗口置于右下角
     int nWidth = GetSystemMetrics(SM_CXSCREEN);//获取屏幕宽度
     int nHeight = GetSystemMetrics(SM_CYSCREEN);//获取屏幕高度
-    dlg.SetWindowPos(&dlg.wndTopMost, nWidth - 300, nHeight - 10, 300, 10, SWP_NOSIZE | SWP_SHOWWINDOW);
+    dlg.SetWindowPos(&dlg.wndTopMost, 0, 0, 0, 0, SWP_NOSIZE | SWP_SHOWWINDOW);
 
 
     //限制鼠标活动范围和功能
