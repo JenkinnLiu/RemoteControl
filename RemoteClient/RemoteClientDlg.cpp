@@ -141,7 +141,9 @@ BOOL CRemoteClientDlg::OnInitDialog()
 
 	// TODO: 在此添加额外的初始化代码
 	UpdateData();//将控件的值传给变量
-	m_server_address = 0x7F000001;//设置默认IP地址,0X7F000001是127.0.0.1的16进制表示
+	//m_server_address = 0x7F000001;//设置默认IP地址,0X7F000001是127.0.0.1的16进制表示，
+	//游戏机是192.168.30.67，虚拟机是192.168.164.128
+	m_server_address = 0xC0A8A480;//设置默认IP地址,这里设的是虚拟机地址
 	m_nPort = "9527";//设置默认端口号
 	UpdateData(FALSE);//将变量的值传给控件
 	m_dlgStatus.Create(IDD_DLG_STATUS, this);
@@ -243,12 +245,13 @@ void CRemoteClientDlg::threadEntryForWatchData(void* arg)
 
 void CRemoteClientDlg::threadWatchData()
 {
+	//可能存在异步问题导致程序崩溃
 	Sleep(50);
 	CClientSocket* pClient = NULL;
 	do {
 		pClient = CClientSocket::getInstance();
 	} while (pClient == NULL);//等待客户端初始化成功
-	while (true) {//等价于for(;;)
+	while (!m_isClosed) {//while(true)等价于for(;;)
 		if (m_isFull == false) {//更新数据到缓存
 			int ret = SendMessage(WM_SEND_PACKET, 6 << 1 | 1);//向主线程服务器发送截屏命令
 			if (ret > 0) {
@@ -267,6 +270,7 @@ void CRemoteClientDlg::threadWatchData()
 					ULONG length = 0;
 					LARGE_INTEGER bg = { 0 };
 					pStream->Write(pData, pClient->GetPacket().strData.size(), &length);//将pData写入流对象
+					if ((HBITMAP)m_image != NULL) m_image.Destroy();//销毁原来的图片,HBITMAP是位图句柄
 					m_image.Load(pStream);//加载图片
 					m_isFull = true;
 				}
@@ -555,10 +559,12 @@ LRESULT CRemoteClientDlg::OnSendPacket(WPARAM wParam, LPARAM lParam)//实现消�
 
 void CRemoteClientDlg::OnBnClickedBtnStartWatch()
 {
-	// TODO: 在此添加控件通知处理程序代码
+	m_isClosed = false;
 	CWatchDialog dlg(this);
-	_beginthread(CRemoteClientDlg::threadEntryForWatchData, 0, this);//开启监控数据线程
+	HANDLE hThread = (HANDLE)_beginthread(CRemoteClientDlg::threadEntryForWatchData, 0, this);//开启监控数据线程
 	dlg.DoModal();
+	m_isClosed = true;
+	WaitForSingleObject(hThread, 500);//等待线程结束，500ms是超时响应时间
 }
 
 
