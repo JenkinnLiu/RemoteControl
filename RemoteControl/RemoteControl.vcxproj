@@ -140,6 +140,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="Command.h" />
     <ClInclude Include="framework.h" />
     <ClInclude Include="LockDialog.h" />
     <ClInclude Include="pch.h" />
@@ -147,8 +148,10 @@
     <ClInclude Include="Resource.h" />
     <ClInclude Include="ServerSocket.h" />
     <ClInclude Include="targetver.h" />
+    <ClInclude Include="Tool.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="Command.cpp" />
     <ClCompile Include="LockDialog.cpp" />
     <ClCompile Include="pch.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
@@ -158,6 +161,7 @@
     </ClCompile>
     <ClCompile Include="RemoteControl.cpp" />
     <ClCompile Include="ServerSocket.cpp" />
+    <ClCompile Include="Tool.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="RemoteControl.rc" />
