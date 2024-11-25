@@ -35,41 +35,20 @@ int main()
         else
         {
 			CCommand cmd;
-            CServerSocket* pserver = CServerSocket::getInstance();
-            int count = 0;
-            if (pserver->InitSocket() == false) {
+            //转换成void*类型是最好加一个强制类型转换reinterpret_cast<SOCKET_CALLBACK>
+            int ret = CServerSocket::getInstance()->Run(reinterpret_cast<SOCKET_CALLBACK>(&CCommand::RunCommand), &cmd);//run函数中调用了InitSocket
+            switch (ret) {
+            case -1:
                 MessageBox(NULL, _T("网络初始化异常，未能成功初始化，请检查网络状态！"), _T("网络初始化失败！"), MB_OK | MB_ICONERROR);
+				exit(0);
+				break;
+            case -2:
+                MessageBox(NULL, _T("多次无法正常接入用户，结束程序！"), _T("客户端连接失败！"), MB_OK | MB_ICONERROR);
                 exit(0);
-			}//初始化只需调用一次即可，accept需调用多次
-			while (CServerSocket::getInstance() != NULL) {
-				if (pserver->AcceptClient()) {
-                    TRACE("AcceptClient成功: %d， 服务器开始调用dealcommand\r\n");
-					int ret = pserver->DealCommand();//接收客户端的命令
-                    TRACE("DealCommand: %d\r\n", ret);
-					if (ret > 0) {//处理成功
-						TRACE("服务器接收到的命令: %d\r\n", pserver->GetPacket().sCmd);
-                        ret = cmd.ExcuteCommand(ret);//执行命令
-						if (ret > 0) {
-                            TRACE("命令执行失败: %d ret = %d\r\n", pserver->GetPacket().sCmd, ret);
-						}
-						pserver->CloseClient();//关闭客户端
-                    }
-                    
-                }
-                else {
-                    if (count >= 3) {
-                        MessageBox(NULL, _T("多次无法正常接入用户，结束程序！"), _T("客户端连接失败！"), MB_OK | MB_ICONERROR);
-					    exit(0);
-                    }
-					MessageBox(NULL, _T("无法正常接入用户，自动重试！"), _T("客户端连接失败！"), MB_OK | MB_ICONERROR);
-                    count++;
-                }
+                break;
             }
-				
-         
-            
-            
-
+			
+          
 		}
         // TODO: 在此处为应用程序的行为编写代码。
         //WSADATA data;
