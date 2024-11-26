@@ -23,7 +23,7 @@ public:
         }
         return m_instance;
     }
-    int Run(SOCKET_CALLBACK callback, void* arg, short port = 9257) {//Socket初始化回调函数
+    int Run(SOCKET_CALLBACK callback, void* arg, short port = 9257) {//Socket初始化回调函数RunCommand
         bool ret = InitSocket(port);
         if (ret == false) return -1;
         std::list<CPacket> lstPackets;//包列表
@@ -121,31 +121,13 @@ protected:
 		//Sleep(1);//这里延迟1ms是因为如果发送太快，缓冲区可能会满，导致发送失败，所以要做延迟处理！！
         return send(m_client, pack.Data(), pack.Size(), 0) > 0;
     }
-    bool GetFilePath(std::string& strPath) {
-        if ((m_packet.sCmd >= 2) && (m_packet.sCmd <= 4) 
-            || (m_packet.sCmd == 9) ) {//获取文件列表的命令：2, 打开文件：3
-            strPath = m_packet.strData;
-            return true;
-        }
-        return false;
-    }
-    bool GetMouseEvent(MOUSEEV& mouse) {
-        if (m_packet.sCmd == 5) {
-            memcpy(&mouse, m_packet.strData.c_str(), sizeof MOUSEEV);
-            return true;
-        }
-        return false;
-    }
-    CPacket& GetPacket() {
-        return m_packet;
-    }
 	void CloseClient() {
 		if (m_client != INVALID_SOCKET) {
 			closesocket(m_client);
 			m_client = INVALID_SOCKET;
 		}
 	}
-
+     
 private:
     SOCKET m_client;
     SOCKET m_sock;

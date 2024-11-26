@@ -165,7 +165,9 @@ protected:
 			} while (rlen >= 1024);
 			fclose(pFile);//别忘了关文件
 		}
-		lstPacket.push_back(CPacket(4, NULL, 0));
+		else {
+			lstPacket.push_back(CPacket(4, NULL, 0));
+		}
 		return 0;
 	}
 

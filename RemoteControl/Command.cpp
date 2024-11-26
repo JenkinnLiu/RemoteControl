@@ -31,5 +31,5 @@ int CCommand::ExcuteCommand(int nCmd, std::list<CPacket>& lstPacket, CPacket& in
 	if (it == m_mapFunction.end()) {
 		return -1;//没找到
 	}
-	return (this->*it->second)(lstPacket, inPacket);
+	return (this->*it->second)(lstPacket, inPacket); //函数指针RunCommand()
 }
