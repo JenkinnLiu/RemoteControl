@@ -42,6 +42,9 @@
     <ClInclude Include="CWatchDialog.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="ClientController.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="RemoteClient.cpp">
@@ -62,6 +65,9 @@
     <ClCompile Include="CWatchDialog.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="ClientController.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="RemoteClient.rc">
@@ -72,6 +78,7 @@
     <None Include="res\RemoteClient.rc2">
       <Filter>资源文件</Filter>
     </None>
+    <None Include="cpp.hint" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="res\RemoteClient.ico">

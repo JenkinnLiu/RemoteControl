@@ -235,7 +235,7 @@ void CRemoteClientDlg::OnBnClickedBtnFileinfo()
 		dr += drivers[i];
 	}
 	if (dr.size() > 0) {
-		dr += ":";//将盘符后面的\0去掉,加分好
+		dr += ":";//将盘符后面的\0去掉,加分好 
 		HTREEITEM hTemp = m_Tree.InsertItem(dr.c_str(), TVI_ROOT, TVI_LAST);//插入可用盘符, TVI_ROOT表示根节点，TVI_LAST表示最后一个节点,表示追加到根目录
 		m_Tree.InsertItem(NULL, hTemp, TVI_LAST);// 插入一个空节点,为的是可以双击树控件，获取文件信息
 	}
