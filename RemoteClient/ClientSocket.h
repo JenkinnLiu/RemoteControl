@@ -4,6 +4,7 @@
 #include <string>
 #include <ws2tcpip.h>//inet_pton
 #include <vector>
+#include <unordered_map>
 
 #pragma pack(push)
 #pragma pack(1)
@@ -12,7 +13,7 @@ class CPacket
 {
 public:
     CPacket() :sHead(0), nLength(0), sCmd(0), sSum(0) {}
-    CPacket(WORD nCmd, const BYTE* pData, size_t nSize) {//打包构造函数
+    CPacket(WORD nCmd, const BYTE* pData, size_t nSize, HANDLE hEvent) {//打包构造函数
         sHead = 0xFEFF;
         nLength = nSize + 4;
         sCmd = nCmd;
@@ -27,6 +28,7 @@ public:
         for (size_t j = 0; j < strData.size(); j++) {
             sSum += BYTE(strData[j]) & 0xFF;
         }
+        this->hEvent = hEvent;
     }
     CPacket(const CPacket& pack) {//拷贝构造函数
         sHead = pack.sHead;
@@ -34,6 +36,7 @@ public:
         strData = pack.strData;
         sCmd = pack.sCmd;
         sSum = pack.sSum;
+        hEvent = pack.hEvent;
     }
     CPacket& operator=(const CPacket& pack) {//赋值构造函数
         if (this == &pack) return *this;//防止自赋值
@@ -42,9 +45,10 @@ public:
         strData = pack.strData;
         sCmd = pack.sCmd;
         sSum = pack.sSum;
+        hEvent = pack.hEvent;
         return *this;
     }
-    CPacket(const BYTE* pData, size_t& nSize) :sHead(0), nLength(0), sCmd(0), sSum(0)
+	CPacket(const BYTE* pData, size_t& nSize) :sHead(0), nLength(0), sCmd(0), sSum(0), hEvent(INVALID_HANDLE_VALUE)
     {//这个构造函数用于解析数据包，解包构造函数
         size_t i = 0;
         for (i = 0; i < nSize; i++) {
@@ -112,6 +116,7 @@ public:
     std::string strData;//包数据
     WORD sCmd;//控制命令
     WORD sSum;//校验和
+	HANDLE hEvent;//事件句柄
 };
 
 
@@ -260,6 +265,8 @@ public:
 		m_nPort = nPort;
     }
 private:
+    std::list<CPacket> m_lstSend;
+    std::unordered_map<HANDLE, std::list<CPacket>> m_mapAck; 
 	int m_nIP;//IP地址
 	int m_nPort;//端口
 
@@ -288,6 +295,8 @@ private:
         closesocket(m_sock);
         WSACleanup();
     };
+    static void threadEntry(void* arg);
+    void threadFunc();
     BOOL InitSockEnv() {
         WSADATA data;
         if (WSAStartup(MAKEWORD(1, 1), &data) != 0) {

@@ -33,3 +33,47 @@ void Dump(BYTE* pData, size_t nSize) {
     strOut += "\n";
     OutputDebugStringA(strOut.c_str());
 }
+
+void CClientSocket::threadEntry(void* arg)
+{
+    CClientSocket* thiz = (CClientSocket*)arg;
+    thiz->threadFunc();
+}
+
+void CClientSocket::threadFunc()
+{
+    if (InitSocket() == false) {
+        return;
+    }
+    std::string strBuffer;
+    strBuffer.resize(BUFFER_SIZE);
+    char* pBuffer = (char*)strBuffer.c_str();
+    int index = 0;
+    while (m_sock != INVALID_SOCKET) {
+        if (m_lstSend.size() > 0) {//有数据发送， 只有当发送队列有数据时才发送，否则一直等待
+            CPacket& head = m_lstSend.front();
+            if (Send(head) == false) {
+                TRACE("发送失败！\r\n");
+                continue;
+            }//用排队的方式解决问题
+			m_mapAck[head.hEvent] = std::list<CPacket>();
+            int length = recv(m_sock, pBuffer + index, BUFFER_SIZE - index, 0);
+            if (length > 0 || index > 0) {
+                index += length;
+                size_t size = (size_t)index;
+                CPacket pack((BYTE*)pBuffer, size);
+				pack.hEvent = head.hEvent;
+                
+                if (size > 0) {//解析包成功， 对于文件夹信息获取，文件信息获取可能产生问题
+                    //通知对应的事件
+                    SetEvent(head.hEvent);
+                    std::list<CPacket>().push_back(pack);
+                }
+            }
+            else if (length == 0 && index <= 0) {
+                CloseSocket();
+            }
+            m_lstSend.pop_front();//删除包
+        }
+    }
+}

@@ -50,7 +50,9 @@ public:
 	int SendCommandPacket(int nCmd, bool bAutoClose = true, BYTE* pData = NULL, size_t nLength = 0) {
 		CClientSocket* pClient = CClientSocket::getInstance();
 		if (pClient->InitSocket() == -1) return false;
-		pClient->Send(CPacket(nCmd, pData, nLength));
+		HANDLE hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);//创建一个事件
+		//TODO: 不应该直接发送，而是投入发送队列
+		pClient->Send(CPacket(nCmd, pData, nLength, hEvent));
 		int cmd = DealCommand();
 		TRACE("ackCmd = %d\r\n", cmd);
 		if (bAutoClose) {
