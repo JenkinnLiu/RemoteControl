@@ -84,7 +84,6 @@ BEGIN_MESSAGE_MAP(CRemoteClientDlg, CDialogEx)
 	ON_COMMAND(ID_DOWNLOAD_FILE, &CRemoteClientDlg::OnDownloadFile)
 	ON_COMMAND(ID_DELETE_FILE, &CRemoteClientDlg::OnDeleteFile)
 	ON_COMMAND(ID_RUN_FILE, &CRemoteClientDlg::OnRunFile)
-	ON_MESSAGE(WM_SEND_PACKET, &CRemoteClientDlg::OnSendPacket)//注册消息①
 	ON_BN_CLICKED(IDC_BTN_START_WATCH, &CRemoteClientDlg::OnBnClickedBtnStartWatch)
 	ON_WM_TIMER()
 	ON_EN_CHANGE(IDC_EDIT_PORT, &CRemoteClientDlg::OnEnChangeEditPort)
@@ -135,7 +134,7 @@ BOOL CRemoteClientDlg::OnInitDialog()
 	UpdateData(FALSE);//将变量的值传给控件
 	m_dlgStatus.Create(IDD_DLG_STATUS, this);
 	m_dlgStatus.ShowWindow(SW_HIDE);//隐藏状态对话框
-	m_isFull = false;//初始化缓存没有数据
+	
 	return TRUE;  // 除非将焦点设置到控件，否则返回 TRUE
 }
 
@@ -412,33 +411,6 @@ void CRemoteClientDlg::OnRunFile()
 	if (ret < 0) {
 		AfxMessageBox("打开文件命令执行失败！！");
 	}
-}
-
-LRESULT CRemoteClientDlg::OnSendPacket(WPARAM wParam, LPARAM lParam)//实现消息响应函数
-{
-	int ret = 0;
-	int cmd = wParam >> 1;//如果wParam >> 1是命令号
-	switch (cmd) {
-	case 4:
-	{
-		CString strPath = (LPCSTR)lParam;//lParam是文件路径
-		ret = CClientController::getInstance()->SendCommandPacket(cmd, wParam & 1, (BYTE*)(LPCSTR)strPath, strPath.GetLength());//下载文件,wParam >> 1表示命令号，wParam & 1表示是否自动关闭套接字
-	}
-	break;
-	case 5: {//鼠标操作
-		ret = CClientController::getInstance()->SendCommandPacket(cmd, wParam & 1, (BYTE*)lParam, sizeof MOUSEEV);
-	}
-	break;
-	case 6: 
-	case 7:
-	case 8: {
-		ret = CClientController::getInstance()->SendCommandPacket(cmd, wParam & 1);//远程监控命令
-	}
-	break;
-	default:
-		ret = -1;
-	}
-	return ret;
 }
 
 

@@ -20,11 +20,19 @@ public:
 
 protected:
 	virtual void DoDataExchange(CDataExchange* pDX);    // DDX/DDV 支持
+	bool m_isFull;//缓存是否有数据，true,有数据，false,无数据
 
 	DECLARE_MESSAGE_MAP()
 public:
 	int m_nObjWidth;//分辨率宽
 	int m_nObjHeight;//分辨率高
+
+	void SetImageStatus(bool isFull = false) {
+		m_isFull = isFull;
+	}
+	bool isFull() const {//const不允许修改成员变量
+		return m_isFull;
+	}
 
 	CPoint UserPoint2RemoteScreenPoint(CPoint& point, bool isScreen = false);
 	virtual BOOL OnInitDialog();

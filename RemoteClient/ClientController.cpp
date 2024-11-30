@@ -4,6 +4,7 @@
 
 std::unordered_map<UINT, CClientController::MSGFUNC> CClientController::m_mapFunc;
 CClientController* CClientController::m_instance = NULL;
+CClientController::CHelper CClientController::m_helper;
 CClientController* CClientController::getInstance()
 {
 	if (m_instance == NULL) {
@@ -20,7 +21,7 @@ CClientController* CClientController::getInstance()
 			m_mapFunc[MsgFuncs[i].nMsg] = MsgFuncs[i].func;
 		}
 	}
-	return nullptr;
+	return m_instance;
 }
 
 int CClientController::InitController()
@@ -52,12 +53,35 @@ LRESULT CClientController::SendMessage(MSG msg)
 
 }
 
+int CClientController::DownFile(CString strPath)
+{
+	CFileDialog dlg(FALSE, NULL,
+		strPath, OFN_OVERWRITEPROMPT | OFN_HIDEREADONLY,
+		NULL, &m_remoteDlg);//打开文件对话框,OFN_OVERWRITEPROMPT表示如果文件已经存在，询问是否覆盖，OFN_HIDEREADONLY表示隐藏只读复选框
+	if (dlg.DoModal() == IDOK) {
+		m_strRemote = strPath;
+		m_strLocal = dlg.GetPathName();//本地文件路径
+		CString strLocal = dlg.GetPathName();//获取文件路径
+
+		m_hThreadDownload = (HANDLE)_beginthread(&CClientController::threadDownloadEntry, 0, this);
+		if (WaitForSingleObject(m_hThreadDownload, 0) != WAIT_TIMEOUT) {//没有超时，线程错误
+			return -1;
+		}
+		m_remoteDlg.BeginWaitCursor();
+		m_statusDlg.m_info.SetWindowText(_T("命令正在执行中，请稍后..."));
+		m_statusDlg.ShowWindow(SW_SHOW);//显示状态对话框
+		m_statusDlg.CenterWindow(&m_remoteDlg);
+		m_statusDlg.SetActiveWindow();//设置为前台活动窗口
+	}
+	return 0;
+}
+
 void CClientController::StartWatchScreen()
 {
 	m_isClosed = false;
-	CWatchDialog dlg(&m_remoteDlg);
+	//m_watchDlg.SetParent(&m_remoteDlg);//设置父窗口
 	m_hThreadWatch = (HANDLE)_beginthread(&CClientController::threadWatchScreen, 0, this);//创建监视线程
-	dlg.DoModal();
+	m_watchDlg.DoModal();
 	m_isClosed = true;
 	WaitForSingleObject(m_hThreadWatch, 500);//等待线程结束
 }
@@ -66,12 +90,12 @@ void CClientController::threadWatchScreen()
 {
 	Sleep(50);
 	while (!m_isClosed) {
-		if (m_remoteDlg.isFull() == false) {
+		if (m_watchDlg.isFull() == false) {
 			int ret = SendCommandPacket(6);
 			if (ret == 6) { //获取屏幕数据
 				CImage image;
 				if (GetImage(m_remoteDlg.GetImage()) == 0) { //获取图片成功
-					m_remoteDlg.SetImageStatus(true);//设置图片缓存有数据
+					m_watchDlg.SetImageStatus(true);//设置图片缓存有数据
 				}
 				else {
 					TRACE("获取图片失败！！%d\r\n", ret);
@@ -133,7 +157,7 @@ void CClientController::threadDownloadFile()
 void CClientController::threadDownloadEntry(void* arg)
 {
 	CClientController* thiz = (CClientController*)arg;
-	thiz->threadDownloadFile();	
+	thiz->threadDownloadFile();
 	_endthread();
 }
 
@@ -167,7 +191,7 @@ unsigned __stdcall CClientController::threadEntry(void* arg)
 	CClientController* thiz = (CClientController*)arg;//获取当前对象
 	thiz->threadFunc();
 	_endthreadex(0);
-    return 0;
+	return 0;
 }
 
 LRESULT CClientController::OnSendPack(UINT nMsg, WPARAM wParam, LPARAM lParam)

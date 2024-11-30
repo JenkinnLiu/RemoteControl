@@ -64,27 +64,7 @@ public:
 		return CTool::Byte2Image(image, pClient->GetPacket().strData);
 		
 	}
-	int DownFile(CString strPath) {
-		CFileDialog dlg(FALSE, NULL,
-			strPath, OFN_OVERWRITEPROMPT | OFN_HIDEREADONLY,
-			NULL, &m_remoteDlg);//打开文件对话框,OFN_OVERWRITEPROMPT表示如果文件已经存在，询问是否覆盖，OFN_HIDEREADONLY表示隐藏只读复选框
-		if (dlg.DoModal() == IDOK) {
-			m_strRemote = strPath;
-			m_strLocal = dlg.GetPathName();//本地文件路径
-			CString strLocal = dlg.GetPathName();//获取文件路径
-
-			m_hThreadDownload = (HANDLE)_beginthread(&CClientController::threadDownloadEntry, 0, this);
-			if (WaitForSingleObject(m_hThreadDownload, 0) != WAIT_TIMEOUT) {//没有超时，线程错误
-				return -1;
-			}
-			m_remoteDlg.BeginWaitCursor();
-			m_statusDlg.m_info.SetWindowText(_T("命令正在执行中，请稍后..."));
-			m_statusDlg.ShowWindow(SW_SHOW);//显示状态对话框
-			m_statusDlg.CenterWindow(&m_remoteDlg);
-			m_statusDlg.SetActiveWindow();//设置为前台活动窗口
-		}
-		return 0;
-	}
+	int DownFile(CString strPath);
 	void StartWatchScreen();
 
 protected:
@@ -156,7 +136,7 @@ private:
 	class CHelper {
 	public:
 		CHelper(){
-			CClientController::getInstance();
+			
 		}
 		~CHelper() {
 			CClientController::releaseInstance;

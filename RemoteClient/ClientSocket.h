@@ -201,6 +201,7 @@ public:
         //服务端接收是单个命令，但是服务端会发送很大的包，所以接收短命令服务端只需要开一个new char就行
         //客户端的话要用vector接收大的数据包
 		char* buffer = m_buffer.data();//用vector的data函数返回指向数组的指针，不用担心内存泄漏
+        //多线程发送命令时可能会出现冲突，可能接收到图片，也有可能接受到鼠标
 		static size_t index = 0;//未处理数据的长度,这里设置为静态变量，
         //是因为DealCommand是一个循环函数，每次调用都会用到index，如果不设置成静态变量，
         // 每次调用DealCommand都会初始化index
