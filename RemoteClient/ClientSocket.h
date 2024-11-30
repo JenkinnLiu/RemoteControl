@@ -92,7 +92,7 @@ public:
     int Size() {
         return nLength + 6;//包头+包长+包数据，包数据的大小
     }
-    const char* Data() {//返回整个包的数据,复制到缓冲区strOut中
+    const char* Data(std::string& strOut) const {//返回整个包的数据,复制到缓冲区strOut中
         strOut.resize(nLength + 6);
         BYTE* pData = (BYTE*)strOut.c_str();
         *(WORD*)pData = sHead;//包头
@@ -112,7 +112,6 @@ public:
     std::string strData;//包数据
     WORD sCmd;//控制命令
     WORD sSum;//校验和
-    std::string strOut;//整个包的数据
 };
 
 
@@ -159,7 +158,7 @@ public:
         }
         return m_instance;
     }
-    bool InitSocket(int nIP, int nPort) {//客户端需要输入IP地址
+    bool InitSocket() {//客户端需要输入IP地址
 		if (m_sock != INVALID_SOCKET) CloseSocket();//如果已经连接，先关闭socket再重开一个
 		m_sock = socket(PF_INET, SOCK_STREAM, 0);//IPV4, TCP,客户端需要重新建立socket
         if (m_sock == -1) return false;
@@ -173,7 +172,7 @@ public:
         //使用 sprintf_s 函数将整数形式的 IP 地址 nIP 转换为字符串形式，并存储在 strIP 中。
         //nIP >> 24、nIP >> 16、nIP >> 8 和 nIP 分别提取 IP 地址的四个字节，并使用 & 0xFF 确保每个字节的值在 0 到 255 之间。
         char strIP[INET_ADDRSTRLEN];
-        sprintf_s(strIP, "%d.%d.%d.%d", (nIP >> 24) & 0xFF, (nIP >> 16) & 0xFF, (nIP >> 8) & 0xFF, nIP & 0xFF);
+        sprintf_s(strIP, "%d.%d.%d.%d", (m_nIP >> 24) & 0xFF, (m_nIP >> 16) & 0xFF, (m_nIP >> 8) & 0xFF, m_nIP & 0xFF);
         int ret = inet_pton(AF_INET, strIP, &serv_adr.sin_addr.s_addr);
         if (ret == 1) {
 			TRACE("inet_pton success!\r\n");
@@ -181,7 +180,7 @@ public:
         else {
             TRACE("inet_pton failed, %d %s\r\n", WSAGetLastError(), GetErrInfo(WSAGetLastError()).c_str());
         }
-        serv_adr.sin_port = htons(nPort);
+        serv_adr.sin_port = htons(m_nPort);
         if (serv_adr.sin_addr.s_addr == INADDR_NONE) {
 			AfxMessageBox("无效的IP地址！");
             return false;
@@ -227,10 +226,12 @@ public:
         if (m_sock == -1) return false;
         return send(m_sock, pData, size, 0) > 0;
     }
-    bool Send(CPacket& pack) {
-        TRACE("向服务器send测试数据, 包长为%d，m_sock == %d\r\n", pack.Size(), m_sock);
+    bool Send(const CPacket& pack) {
+        TRACE("向服务器send测试数据，m_sock == %d\r\n" , m_sock);
         if (m_sock == -1) return false;
-        return send(m_sock, pack.Data(), pack.Size(), 0) > 0;
+        std::string strOut;
+		pack.Data(strOut);
+        return send(m_sock, strOut.c_str(), strOut.size(), 0) > 0;
     }
     bool GetFilePath(std::string& strPath) {
         if ((m_packet.sCmd >= 2) && (m_packet.sCmd <= 4)) {//获取文件列表的命令：2, 打开文件：3
@@ -253,7 +254,14 @@ public:
 		closesocket(m_sock);
         m_sock = INVALID_SOCKET;//-1
 	}
+    void UpdateAddress(int nIP, int nPort) {
+        m_nIP = nIP;
+		m_nPort = nPort;
+    }
 private:
+	int m_nIP;//IP地址
+	int m_nPort;//端口
+
     std::vector<char> m_buffer;
     SOCKET m_sock;
     CPacket m_packet;
@@ -262,9 +270,10 @@ private:
     }
     CClientSocket(const CClientSocket& ss) {//复制构造函数
         m_sock == ss.m_sock;
-
+        m_nIP = ss.m_nIP;
+		m_nPort = ss.m_nPort;
     }
-    CClientSocket() {
+    CClientSocket() :m_nIP(INADDR_ANY), m_nPort(0) {
         if (InitSockEnv() == FALSE) {
             MessageBox(NULL, _T("无法初始化套接字环境,请检查网络设置！"), _T("初始化错误"), MB_OK | MB_ICONERROR);
             exit(0);

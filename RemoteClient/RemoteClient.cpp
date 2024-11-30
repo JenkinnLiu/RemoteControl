@@ -76,7 +76,7 @@ BOOL CRemoteClientApp::InitInstance()
 	INT_PTR nResponse = CClientController::getInstance()->Invoke(m_pMainWnd);
 	CRemoteClientDlg dlg;
 	m_pMainWnd = &dlg;
-	INT_PTR nResponse = dlg.DoModal();
+	nResponse = dlg.DoModal();
 	if (nResponse == IDOK)
 	{
 		// TODO: 在此放置处理何时用

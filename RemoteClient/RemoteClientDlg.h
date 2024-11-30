@@ -38,26 +38,14 @@ private:
 	bool m_isFull;//缓存是否有数据，true,有数据，false,无数据
 	bool m_isClosed;//监视是否关闭
 
-	static void threadEntryForWatchData(void* arg);//监控数据线程入口函数，静态函数不能使用this指针
-	void threadWatchData();//成员函数可以使用this指针，会非常方便
-	static void threadEntryForDownFile(void* arg);
-	void threadDownFile();
+	//static void threadEntryForDownFile(void* arg);
+	//void threadDownFile();
 	void LoadFileCurrent();//加载当前目录下的文件
 	void LoadFileInfo();
 	CString GetPath(HTREEITEM hTree);//获取路径,让这个函数可以使用m_Tree
 	void DeleteTreeChildrenItem(HTREEITEM hTree);//删除树的子节点
-	//1. 查看磁盘分区
-	//2. 查看指定目录下的文件
-	//3. 打开文件
-	//4. 下载文件
-	//5. 鼠标操作
-	// 6. 发送屏幕内容
-	// 7. 锁机
-	// 8. 解锁
-	// 9. 删除文件
-	// 1981. 测试连接
-	//返回值是命令号cmd, 如果小于0是错误
-	int SendCommandPacket(int nCmd, bool bAutoClose = true, BYTE* pData = NULL, size_t nLength = 0);
+	
+	//int SendCommandPacket(int nCmd, bool bAutoClose = true, BYTE* pData = NULL, size_t nLength = 0);
 	
 	//实现
 
@@ -89,4 +77,6 @@ public:
 	afx_msg LRESULT OnSendPacket(WPARAM wParam, LPARAM lParam);//定义自定义消息响应函数
 	afx_msg void OnBnClickedBtnStartWatch();
 	afx_msg void OnTimer(UINT_PTR nIDEvent);
+	afx_msg void OnEnChangeEditPort();
+	afx_msg void OnIpnFieldchangedIpaddressServ(NMHDR* pNMHDR, LRESULT* pResult);
 };
