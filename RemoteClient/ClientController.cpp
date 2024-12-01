@@ -11,8 +11,8 @@ CClientController* CClientController::getInstance()
 		m_instance = new CClientController();
 		//下面的代码是将消息和消息处理函数关联起来
 		struct { UINT nMsg; MSGFUNC func; }MsgFuncs[] = {
-			{ WM_SEND_PACK, &CClientController::OnSendPack },
-			{ WM_SEND_DATA, &CClientController::OnSendData },
+			//{ WM_SEND_PACK, &CClientController::OnSendPack },
+			//{ WM_SEND_DATA, &CClientController::OnSendData },
 			{ WM_SHOW_STATUS, &CClientController::OnShowStatus },
 			{ WM_SHOW_WATCH, &CClientController::OnShowWatcher },
 			{(UINT)-1, NULL }
@@ -91,10 +91,10 @@ void CClientController::threadWatchScreen()
 	Sleep(50);
 	while (!m_isClosed) {
 		if (m_watchDlg.isFull() == false) {
-			int ret = SendCommandPacket(6);
+			std::list<CPacket> lstPacks;
+			int ret = SendCommandPacket(6, true, NULL, 0, &lstPacks);
 			if (ret == 6) { //获取屏幕数据
-				CImage image;
-				if (GetImage(m_remoteDlg.GetImage()) == 0) { //获取图片成功
+				if (CTool::Byte2Image(m_remoteDlg.GetImage(), lstPacks.front().strData) == 0) { //将数据转换为图片，获取图片成功
 					m_watchDlg.SetImageStatus(true);//设置图片缓存有数据
 				}
 				else {
@@ -194,19 +194,19 @@ unsigned __stdcall CClientController::threadEntry(void* arg)
 	return 0;
 }
 
-LRESULT CClientController::OnSendPack(UINT nMsg, WPARAM wParam, LPARAM lParam)
-{
-	CClientSocket* pClient = CClientSocket::getInstance();
-	CPacket* pPacket = (CPacket*)wParam;
-	return pClient->Send(*pPacket);
-}
+//LRESULT CClientController::OnSendPack(UINT nMsg, WPARAM wParam, LPARAM lParam)
+//{
+//	CClientSocket* pClient = CClientSocket::getInstance();
+//	CPacket* pPacket = (CPacket*)wParam;
+//	return pClient->Send(*pPacket);
+//}
 
-LRESULT CClientController::OnSendData(UINT nMsg, WPARAM wParam, LPARAM lParam)
-{
-	CClientSocket* pClient = CClientSocket::getInstance();
-	char* pBuffer = (char*)wParam;
-	return pClient->Send(pBuffer, (int)lParam);
-}
+//LRESULT CClientController::OnSendData(UINT nMsg, WPARAM wParam, LPARAM lParam)
+//{
+//	CClientSocket* pClient = CClientSocket::getInstance();
+//	char* pBuffer = (char*)wParam;
+//	return pClient->Send(pBuffer, (int)lParam);
+//}
 
 LRESULT CClientController::OnShowStatus(UINT nMsg, WPARAM wParam, LPARAM lParam)
 {

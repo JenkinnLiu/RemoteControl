@@ -228,16 +228,26 @@ public:
         }
         return -1;
     }
-    bool Send(const char* pData, int size) {
-        if (m_sock == -1) return false;
-        return send(m_sock, pData, size, 0) > 0;
-    }
-    bool Send(const CPacket& pack) {
-        TRACE("向服务器send测试数据，m_sock == %d\r\n" , m_sock);
-        if (m_sock == -1) return false;
-        std::string strOut;
-		pack.Data(strOut);
-        return send(m_sock, strOut.c_str(), strOut.size(), 0) > 0;
+    
+    bool SendPacket(const CPacket& pack, std::list<CPacket>& lstPacks) {
+        if (m_sock == INVALID_SOCKET) {
+            if (InitSocket() == false) return false;
+			_beginthread(&CClientSocket::threadEntry, 0, this);//创建一个线程
+        }
+        m_lstSend.push_back(pack);
+		WaitForSingleObject(pack.hEvent, INFINITE);//等待事件
+        std::unordered_map<HANDLE, std::list<CPacket>>::iterator it;
+		it = m_mapAck.find(pack.hEvent);//查找事件
+        if (it != m_mapAck.end()) {
+            std::list<CPacket>::iterator i;
+			for (i = it->second.begin(); i != it->second.end(); i++) {//遍历事件队列
+				lstPacks.push_back(*i);//将事件队列中的包放入lstPacks
+            }
+			m_mapAck.erase(it);//删除事件, 事件只能处理一次
+            return true;
+        }
+        return false;
+
     }
     bool GetFilePath(std::string& strPath) {
         if ((m_packet.sCmd >= 2) && (m_packet.sCmd <= 4)) {//获取文件列表的命令：2, 打开文件：3
@@ -261,8 +271,10 @@ public:
         m_sock = INVALID_SOCKET;//-1
 	}
     void UpdateAddress(int nIP, int nPort) {
-        m_nIP = nIP;
-		m_nPort = nPort;
+        if (m_nIP != nIP || m_nPort != nPort) {
+            m_nIP = nIP;
+            m_nPort = nPort;
+        }
     }
 private:
     std::list<CPacket> m_lstSend;
@@ -281,7 +293,7 @@ private:
         m_nIP = ss.m_nIP;
 		m_nPort = ss.m_nPort;
     }
-    CClientSocket() :m_nIP(INADDR_ANY), m_nPort(0) {
+    CClientSocket() :m_nIP(INADDR_ANY), m_nPort(0), m_sock(INVALID_SOCKET) {
         if (InitSockEnv() == FALSE) {
             MessageBox(NULL, _T("无法初始化套接字环境,请检查网络设置！"), _T("初始化错误"), MB_OK | MB_ICONERROR);
             exit(0);
@@ -312,6 +324,11 @@ private:
             delete p;
         }
     }
+    bool Send(const char* pData, int size) {
+        if (m_sock == -1) return false;
+        return send(m_sock, pData, size, 0) > 0;
+    }
+    bool Send(const CPacket& pack);
     class CHelper {
     public:
         CHelper() {
