@@ -229,26 +229,8 @@ public:
         return -1;
     }
     
-    bool SendPacket(const CPacket& pack, std::list<CPacket>& lstPacks) {
-        if (m_sock == INVALID_SOCKET) {
-            if (InitSocket() == false) return false;
-			_beginthread(&CClientSocket::threadEntry, 0, this);//创建一个线程
-        }
-        m_lstSend.push_back(pack);
-		WaitForSingleObject(pack.hEvent, INFINITE);//等待事件
-        std::unordered_map<HANDLE, std::list<CPacket>>::iterator it;
-		it = m_mapAck.find(pack.hEvent);//查找事件
-        if (it != m_mapAck.end()) {
-            std::list<CPacket>::iterator i;
-			for (i = it->second.begin(); i != it->second.end(); i++) {//遍历事件队列
-				lstPacks.push_back(*i);//将事件队列中的包放入lstPacks
-            }
-			m_mapAck.erase(it);//删除事件, 事件只能处理一次
-            return true;
-        }
-        return false;
-
-    }
+    bool SendPacket(const CPacket& pack, std::list<CPacket>& lstPacks, bool isAutoClosed = true); 
+    
     bool GetFilePath(std::string& strPath) {
         if ((m_packet.sCmd >= 2) && (m_packet.sCmd <= 4)) {//获取文件列表的命令：2, 打开文件：3
             strPath = m_packet.strData;
@@ -277,8 +259,11 @@ public:
         }
     }
 private:
+    bool m_bAutoClose;
+
     std::list<CPacket> m_lstSend;
     std::unordered_map<HANDLE, std::list<CPacket>> m_mapAck; 
+	std::unordered_map<HANDLE, bool> m_mapAutoCLosed;//事件是否自动关闭的标志
 	int m_nIP;//IP地址
 	int m_nPort;//端口
 
@@ -289,11 +274,12 @@ private:
 
     }
     CClientSocket(const CClientSocket& ss) {//复制构造函数
+        m_bAutoClose = ss.m_bAutoClose;
         m_sock == ss.m_sock;
         m_nIP = ss.m_nIP;
 		m_nPort = ss.m_nPort;
     }
-    CClientSocket() :m_nIP(INADDR_ANY), m_nPort(0), m_sock(INVALID_SOCKET) {
+    CClientSocket() :m_nIP(INADDR_ANY), m_nPort(0), m_sock(INVALID_SOCKET), m_bAutoClose(true) {
         if (InitSockEnv() == FALSE) {
             MessageBox(NULL, _T("无法初始化套接字环境,请检查网络设置！"), _T("初始化错误"), MB_OK | MB_ICONERROR);
             exit(0);

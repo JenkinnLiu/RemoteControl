@@ -24,8 +24,13 @@ protected:
 
 	DECLARE_MESSAGE_MAP()
 public:
+	
 	int m_nObjWidth;//分辨率宽
 	int m_nObjHeight;//分辨率高
+	CImage m_image;
+	CImage& GetImage() {
+		return m_image;
+	}
 
 	void SetImageStatus(bool isFull = false) {
 		m_isFull = isFull;

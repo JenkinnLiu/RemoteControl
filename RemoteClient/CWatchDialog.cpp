@@ -83,23 +83,16 @@ void CWatchDialog::OnTimer(UINT_PTR nIDEvent)
 		CClientController* pParent = CClientController::getInstance();
 		if (m_isFull) {
 			CRect rect;
-			CImage image;
-			pParent->GetImage(image);
 			m_picture.GetWindowRect(rect);//获取控件的矩形区域
 			//将图片显示到控件上，SRCCOPY表示直接拷贝，0， 0表示从左上角显示
 			//pParent->GetImage().BitBlt(m_picture.GetDC()->GetSafeHdc(), 0, 0, SRCCOPY); 
-			
-			if (m_nObjWidth == -1) {
-				m_nObjWidth = image.GetWidth();//获取图片的宽度，设置成分辨率宽
-			}
-			if (m_nObjHeight == -1) {
-				m_nObjHeight = image.GetHeight();//获取图片的高度,设置成分辨率高
-			}
+			m_nObjWidth = m_image.GetWidth();//获取图片的宽度，设置成分辨率宽
+			m_nObjHeight = m_image.GetHeight();//获取图片的高度,设置成分辨率高
 
-			image.StretchBlt(
+			m_image.StretchBlt(
 				m_picture.GetDC()->GetSafeHdc(), 0, 0, rect.Width(), rect.Height(), SRCCOPY);//缩放图片
 			m_picture.InvalidateRect(NULL);//刷新控件
-			image.Destroy();//销毁原来的图片
+			m_image.Destroy();//销毁原来的图片
 			m_isFull = false;//缓存清空
 		}
 	}

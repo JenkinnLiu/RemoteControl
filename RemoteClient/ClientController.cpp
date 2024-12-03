@@ -49,6 +49,7 @@ LRESULT CClientController::SendMessage(MSG msg)
 	MSGINFO info(msg);
 	PostThreadMessage(m_nThreadID, WM_SEND_MESSAGE, (WPARAM)&info, (LPARAM)hEvent);
 	WaitForSingleObject(hEvent, INFINITE);//等待事件
+	CloseHandle(hEvent);  
 	return info.result;
 
 }
@@ -94,8 +95,9 @@ void CClientController::threadWatchScreen()
 			std::list<CPacket> lstPacks;
 			int ret = SendCommandPacket(6, true, NULL, 0, &lstPacks);
 			if (ret == 6) { //获取屏幕数据
-				if (CTool::Byte2Image(m_remoteDlg.GetImage(), lstPacks.front().strData) == 0) { //将数据转换为图片，获取图片成功
+				if (CTool::Byte2Image(m_watchDlg.GetImage(), lstPacks.front().strData) == 0) { //将数据转换为图片，获取图片成功
 					m_watchDlg.SetImageStatus(true);//设置图片缓存有数据
+					TRACE("成功设置图片\r\n");
 				}
 				else {
 					TRACE("获取图片失败！！%d\r\n", ret);

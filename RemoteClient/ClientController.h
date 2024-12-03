@@ -54,6 +54,7 @@ public:
 		std::list<CPacket> lstPacks;
 		if (plstPacks == NULL) plstPacks = &lstPacks;
 		pClient->SendPacket(CPacket(nCmd, pData, nLength, hEvent), *plstPacks);
+		CloseHandle(hEvent);//回收事件句柄，防止资源耗尽
 		if (plstPacks->size() > 0) {
 			return plstPacks->front().sCmd;//返回命令号
 		}
