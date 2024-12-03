@@ -35,20 +35,61 @@ void Dump(BYTE* pData, size_t nSize) {
 	OutputDebugStringA(strOut.c_str());
 }
 
+bool CClientSocket::InitSocket()
+{//客户端需要输入IP地址
+	if (m_sock != INVALID_SOCKET) CloseSocket();//如果已经连接，先关闭socket再重开一个
+	m_sock = socket(PF_INET, SOCK_STREAM, 0);//IPV4, TCP,客户端需要重新建立socket
+	if (m_sock == -1) return false;
+	sockaddr_in serv_adr;
+	memset(&serv_adr, 0, sizeof serv_adr);
+	serv_adr.sin_family = AF_INET;//IPV4地址族
+	//如果inet_addr报C4996, 用inet_pton, inet_addr是过时的函数，或者在属性，预处理器定义中加入WINSOCK_DEPRECATED_NO_WARNINGS
+	//serv_adr.sin_addr.s_addr = inet_addr(strIPAdress.c_str());//在所有IP上监听
+	//int ret = inet_pton(AF_INET, htol(nIP), &serv_adr.sin_addr.s_addr);
+
+	//使用 sprintf_s 函数将整数形式的 IP 地址 nIP 转换为字符串形式，并存储在 strIP 中。
+	//nIP >> 24、nIP >> 16、nIP >> 8 和 nIP 分别提取 IP 地址的四个字节，并使用 & 0xFF 确保每个字节的值在 0 到 255 之间。
+	char strIP[INET_ADDRSTRLEN];
+	sprintf_s(strIP, "%d.%d.%d.%d", (m_nIP >> 24) & 0xFF, (m_nIP >> 16) & 0xFF, (m_nIP >> 8) & 0xFF, m_nIP & 0xFF);
+	int ret = inet_pton(AF_INET, strIP, &serv_adr.sin_addr.s_addr);
+	if (ret == 1) {
+		TRACE("inet_pton success!\r\n");
+	}
+	else {
+		TRACE("inet_pton failed, %d %s\r\n", WSAGetLastError(), GetErrInfo(WSAGetLastError()).c_str());
+	}
+	serv_adr.sin_port = htons(m_nPort);
+	if (serv_adr.sin_addr.s_addr == INADDR_NONE) {
+		AfxMessageBox("无效的IP地址！");
+		return false;
+	}
+	ret = connect(m_sock, (sockaddr*)&serv_adr, sizeof serv_adr);//连接服务器
+	if (ret == -1) {
+		//这里要设置使用多字节字符集，不使用Unicode, 不然会报错，
+		AfxMessageBox("无法连接服务器,请检查网络设置！");//AfxMessagBox是MFC的消息框
+		TRACE("连接失败， %d %s\r\n", WSAGetLastError(), GetErrInfo(WSAGetLastError()).c_str());
+	}
+	return true;
+}
+
 bool CClientSocket::SendPacket(const CPacket& pack, std::list<CPacket>& lstPacks, bool isAutoClosed)
 {
-	if (m_sock == INVALID_SOCKET) {
+	if (m_sock == INVALID_SOCKET && m_hThread == INVALID_HANDLE_VALUE) {
 		//if (InitSocket() == false) return false;
-		_beginthread(&CClientSocket::threadEntry, 0, this);//创建一个线程
+		m_hThread = (HANDLE)_beginthread(&CClientSocket::threadEntry, 0, this);//创建一个线程
 	}
+	m_lock.lock();//加锁, 保证线程安全, 保证事件队列的安全
 	auto pr = m_mapAck.insert(std::pair<HANDLE, std::list<CPacket>&>(pack.hEvent, lstPacks));//在map中基于这个事件创建一个list队列
 	m_mapAutoCLosed[pack.hEvent] = isAutoClosed;//是否自动关闭
 	m_lstSend.push_back(pack);
+	m_lock.unlock();//解锁,保证事件队列只会有一个线程push_back，防止多线程push_back导致数据混乱
 	WaitForSingleObject(pack.hEvent, INFINITE);//等待事件
 	std::unordered_map<HANDLE, std::list<CPacket>&>::iterator it;
 	it = m_mapAck.find(pack.hEvent);//查找事件
 	if (it != m_mapAck.end()) {
+		m_lock.lock();
 		m_mapAck.erase(it);//删除事件, 事件只能处理一次
+		m_lock.unlock();
 		return true;
 	}
 	return false;
@@ -72,9 +113,10 @@ void CClientSocket::threadFunc()
 	InitSocket();
 	while (m_sock != INVALID_SOCKET) {
 		if (m_lstSend.size() > 0) {//有数据发送， 只有当发送队列有数据时才发送，否则一直等待
-			
 			TRACE("lstSend size: %d\r\n", m_lstSend.size());
+			m_lock.lock();//加锁
 			CPacket& head = m_lstSend.front();
+			m_lock.unlock();//解锁, 保证只有一个线程获取front
 			if (Send(head) == false) {
 				TRACE("发送失败！\r\n");
 				
@@ -109,13 +151,16 @@ void CClientSocket::threadFunc()
 						m_mapAutoCLosed.erase(it0);
 						break;
 					}
-				} while (it0->second == false);//如果不自动关闭，就一直接收数据
+				} while (it0->second == false || index > 0);//如果不自动关闭，就一直接收数据
 			}
+			m_lock.lock();//加锁,
 			m_lstSend.pop_front();//删除包
+			m_lock.unlock();//解锁, 保证只有一个线程pop_front
 			if (InitSocket() == false) {
 				InitSocket();
 			}
 		}
+		Sleep(1);//没有数据发送，就休眠1ms,防止CPU占用过高
 	}
 	CloseSocket();
 

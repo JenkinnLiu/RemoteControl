@@ -5,6 +5,7 @@
 #include <ws2tcpip.h>//inet_pton
 #include <vector>
 #include <unordered_map>
+#include <mutex>
 
 #pragma pack(push)
 #pragma pack(1)
@@ -163,42 +164,8 @@ public:
         }
         return m_instance;
     }
-    bool InitSocket() {//客户端需要输入IP地址
-		if (m_sock != INVALID_SOCKET) CloseSocket();//如果已经连接，先关闭socket再重开一个
-		m_sock = socket(PF_INET, SOCK_STREAM, 0);//IPV4, TCP,客户端需要重新建立socket
-        if (m_sock == -1) return false;
-        sockaddr_in serv_adr;
-        memset(&serv_adr, 0, sizeof serv_adr);
-        serv_adr.sin_family = AF_INET;//IPV4地址族
-		//如果inet_addr报C4996, 用inet_pton, inet_addr是过时的函数，或者在属性，预处理器定义中加入WINSOCK_DEPRECATED_NO_WARNINGS
-        //serv_adr.sin_addr.s_addr = inet_addr(strIPAdress.c_str());//在所有IP上监听
-        //int ret = inet_pton(AF_INET, htol(nIP), &serv_adr.sin_addr.s_addr);
-
-        //使用 sprintf_s 函数将整数形式的 IP 地址 nIP 转换为字符串形式，并存储在 strIP 中。
-        //nIP >> 24、nIP >> 16、nIP >> 8 和 nIP 分别提取 IP 地址的四个字节，并使用 & 0xFF 确保每个字节的值在 0 到 255 之间。
-        char strIP[INET_ADDRSTRLEN];
-        sprintf_s(strIP, "%d.%d.%d.%d", (m_nIP >> 24) & 0xFF, (m_nIP >> 16) & 0xFF, (m_nIP >> 8) & 0xFF, m_nIP & 0xFF);
-        int ret = inet_pton(AF_INET, strIP, &serv_adr.sin_addr.s_addr);
-        if (ret == 1) {
-			TRACE("inet_pton success!\r\n");
-        }
-        else {
-            TRACE("inet_pton failed, %d %s\r\n", WSAGetLastError(), GetErrInfo(WSAGetLastError()).c_str());
-        }
-        serv_adr.sin_port = htons(m_nPort);
-        if (serv_adr.sin_addr.s_addr == INADDR_NONE) {
-			AfxMessageBox("无效的IP地址！");
-            return false;
-        }
-		ret = connect(m_sock, (sockaddr*)&serv_adr, sizeof serv_adr);//连接服务器
-        if (ret == -1) {
-			//这里要设置使用多字节字符集，不使用Unicode, 不然会报错，
-			AfxMessageBox("无法连接服务器,请检查网络设置！");//AfxMessagBox是MFC的消息框
-			TRACE("连接失败， %d %s\r\n", WSAGetLastError(), GetErrInfo(WSAGetLastError()).c_str());
-        }
-        return true;
-    }
-#define BUFFER_SIZE 4096000
+	bool InitSocket();//初始化套接字
+#define BUFFER_SIZE 4096000 //4M
     int DealCommand() {
         if (m_sock == -1) return -1;
         //char buffer[1024];
@@ -259,7 +226,9 @@ public:
         }
     }
 private:
+    HANDLE m_hThread;
     bool m_bAutoClose;
+    std::mutex m_lock;//互斥量
 
     std::list<CPacket> m_lstSend;
     std::unordered_map<HANDLE, std::list<CPacket>&> m_mapAck;
@@ -279,7 +248,9 @@ private:
         m_nIP = ss.m_nIP;
 		m_nPort = ss.m_nPort;
     }
-    CClientSocket() :m_nIP(INADDR_ANY), m_nPort(0), m_sock(INVALID_SOCKET), m_bAutoClose(true) {
+    CClientSocket() :m_nIP(INADDR_ANY), m_nPort(0), m_sock(INVALID_SOCKET), m_bAutoClose(true),
+    , m_hThread(INVALID_HANDLE_VALUE)
+    {
         if (InitSockEnv() == FALSE) {
             MessageBox(NULL, _T("无法初始化套接字环境,请检查网络设置！"), _T("初始化错误"), MB_OK | MB_ICONERROR);
             exit(0);
