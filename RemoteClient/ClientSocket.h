@@ -262,7 +262,7 @@ private:
     bool m_bAutoClose;
 
     std::list<CPacket> m_lstSend;
-    std::unordered_map<HANDLE, std::list<CPacket>> m_mapAck; 
+    std::unordered_map<HANDLE, std::list<CPacket>&> m_mapAck;
 	std::unordered_map<HANDLE, bool> m_mapAutoCLosed;//事件是否自动关闭的标志
 	int m_nIP;//IP地址
 	int m_nPort;//端口

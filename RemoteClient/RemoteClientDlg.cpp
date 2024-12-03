@@ -199,13 +199,14 @@ void CRemoteClientDlg::OnBnClickedBtnTest()//发送测试数据
 
 void CRemoteClientDlg::OnBnClickedBtnFileinfo()
 {
-	int ret = CClientController::getInstance()->SendCommandPacket(1);//发送命令数据1，请求磁盘信息,拿到盘符
-	if (ret == -1) {
+	std::list<CPacket> lstPackets;
+	int ret = CClientController::getInstance()->SendCommandPacket(1, true, NULL, 0, &lstPackets);//发送命令数据1，请求磁盘信息,拿到盘符
+	if (ret == -1 || lstPackets.size() <= 0) {
 		AfxMessageBox(_T("命令处理失败"));
 		return;
 	}
-	CClientSocket* pClient = CClientSocket::getInstance();
-	std::string drivers = pClient->GetPacket().strData;//拿到盘符
+	CPacket& head = lstPackets.front(); //获取第一个数据包
+	std::string drivers = head.strData;//拿到盘符
 	std::string dr;
 	m_Tree.DeleteAllItems();//清空树
 	drivers += ',';//加一个逗号，方便最后一个盘符插入
@@ -261,36 +262,27 @@ void CRemoteClientDlg::LoadFileInfo(){
 	DeleteTreeChildrenItem(hTreeSelected);//删除树控件的子节点,避免多次双击重复添加
 	m_LIst.DeleteAllItems();//清空文件列表
 	CString strPath = GetPath(hTreeSelected);
-	int nCmd = CClientController::getInstance()->SendCommandPacket(2, false, (BYTE*)(LPCSTR)strPath, strPath.GetLength());//查看指定目录下的文件
-	TRACE("执行SendCommandPacket2查看指定目录下的文件 ret:%d\r\n", nCmd);
-	PFILEINFO pInfo = (PFILEINFO)CClientSocket::getInstance()->GetPacket().strData.c_str();
-	int Count = 0;
-	while (pInfo->HasNext) {//如果没有下一个文件
-		TRACE("[%s] isdir %d\r\n", pInfo->szFileName, pInfo->IsDirectory);
-		if (pInfo->IsDirectory) {
-			if (CString(pInfo->szFileName) == "." || (CString(pInfo->szFileName) == "..")) {
-				//如果是当前目录或者上级目录，不添加到树控件,避免无限递归死循环
-				int cmd = CClientController::getInstance()->DealCommand();//接收服务器数据
-				TRACE("客户端接收服务器端文件目录,ack:%d\r\n", cmd);
-				if (cmd < 0) break;
-				pInfo = (PFILEINFO)CClientSocket::getInstance()->GetPacket().strData.c_str();
-				continue;
+	std::list<CPacket> lstPackets;
+	int nCmd = CClientController::getInstance()->SendCommandPacket(2, false, (BYTE*)(LPCSTR)strPath, strPath.GetLength(), &lstPackets);//查看指定目录下的文件
+	if (lstPackets.size() > 0) {
+		std::list<CPacket>::iterator it = lstPackets.begin();
+		for (; it != lstPackets.end(); it++) {
+			PFILEINFO pInfo = (PFILEINFO)(*it).strData.c_str();//获取文件信息
+			if (pInfo->HasNext == FALSE) continue;//如果没有下一个文件,则开始读下一个包
+			if (pInfo->IsDirectory) {
+				if (CString(pInfo->szFileName) == "." || (CString(pInfo->szFileName) == "..")) {
+					continue;
+				}
+				HTREEITEM hTemp = m_Tree.InsertItem(pInfo->szFileName, hTreeSelected, TVI_LAST);//插入文件pInfo->szFileName, hTreeSelected表示父节点，TVI_LAST表示最后一个节点
+				m_Tree.InsertItem("", hTemp, TVI_LAST);//插入一个空节点
 			}
-			HTREEITEM hTemp = m_Tree.InsertItem(pInfo->szFileName, hTreeSelected, TVI_LAST);//插入文件pInfo->szFileName, hTreeSelected表示父节点，TVI_LAST表示最后一个节点
-			m_Tree.InsertItem("", hTemp, TVI_LAST);//插入一个空节点
+			else {//如果是文件
+				m_LIst.InsertItem(0, pInfo->szFileName);//插入文件名，0表示插入到第一个位置
+			}
 		}
-		else {//如果是文件
-			m_LIst.InsertItem(0, pInfo->szFileName);//插入文件名，0表示插入到第一个位置
-		}
-		Count++;
-		int cmd = CClientController::getInstance()->DealCommand();//接收服务器数据
-		//TRACE("客户端接收服务器端文件目录,ack:%d\r\n", cmd);
-		if (cmd < 0) break;
-		pInfo = (PFILEINFO)CClientSocket::getInstance()->GetPacket().strData.c_str();
 	}
-
+	
 	CClientController::getInstance()->CloseSocket();
-	TRACE("客户端接收文件数量Count = %d\r\n", Count);
 }
 
 CString CRemoteClientDlg::GetPath(HTREEITEM hTree) {//获取路径

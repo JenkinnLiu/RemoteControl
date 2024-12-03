@@ -53,7 +53,7 @@ public:
 		//TODO: 不应该直接发送，而是投入发送队列
 		std::list<CPacket> lstPacks;
 		if (plstPacks == NULL) plstPacks = &lstPacks;
-		pClient->SendPacket(CPacket(nCmd, pData, nLength, hEvent), *plstPacks);
+		pClient->SendPacket(CPacket(nCmd, pData, nLength, hEvent), *plstPacks, bAutoClose);
 		CloseHandle(hEvent);//回收事件句柄，防止资源耗尽
 		if (plstPacks->size() > 0) {
 			return plstPacks->front().sCmd;//返回命令号

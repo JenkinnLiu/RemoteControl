@@ -41,11 +41,11 @@ bool CClientSocket::SendPacket(const CPacket& pack, std::list<CPacket>& lstPacks
 		//if (InitSocket() == false) return false;
 		_beginthread(&CClientSocket::threadEntry, 0, this);//创建一个线程
 	}
-	m_mapAck[pack.hEvent] = lstPacks;//在map中基于这个事件创建一个list队列
+	auto pr = m_mapAck.insert(std::pair<HANDLE, std::list<CPacket>&>(pack.hEvent, lstPacks));//在map中基于这个事件创建一个list队列
 	m_mapAutoCLosed[pack.hEvent] = isAutoClosed;//是否自动关闭
 	m_lstSend.push_back(pack);
 	WaitForSingleObject(pack.hEvent, INFINITE);//等待事件
-	std::unordered_map<HANDLE, std::list<CPacket>>::iterator it;
+	std::unordered_map<HANDLE, std::list<CPacket>&>::iterator it;
 	it = m_mapAck.find(pack.hEvent);//查找事件
 	if (it != m_mapAck.end()) {
 		m_mapAck.erase(it);//删除事件, 事件只能处理一次
@@ -80,36 +80,41 @@ void CClientSocket::threadFunc()
 				
 				continue;
 			}//用排队的方式解决问题
-			std::unordered_map<HANDLE, std::list<CPacket>>::iterator it;
+			std::unordered_map<HANDLE, std::list<CPacket>&>::iterator it;
 			it = m_mapAck.find(head.hEvent);
-			std::unordered_map<HANDLE, bool>::iterator it0 = m_mapAutoCLosed.find(head.hEvent);
-			do {
-				int length = recv(m_sock, pBuffer + index, BUFFER_SIZE - index, 0);//接收数据
-				if (length > 0 || index > 0) {
-					index += length;//index代表接收到的数据总长度
-					size_t size = (size_t)index;
-					CPacket pack((BYTE*)pBuffer, size);//解析接收到的包
-					pack.hEvent = head.hEvent;
-
-					if (size > 0) {//解析包成功， TODO:对于文件夹信息获取，文件信息获取可能产生问题
-						//通知对应的事件
+			if (it != m_mapAck.end()) {//如果没有找到事件，就创建一个事件
+				std::unordered_map<HANDLE, bool>::iterator it0 = m_mapAutoCLosed.find(head.hEvent);
+				do {
+					int length = recv(m_sock, pBuffer + index, BUFFER_SIZE - index, 0);//接收数据
+					if (length > 0 || index > 0) {
+						index += length;//index代表接收到的数据总长度
+						size_t size = (size_t)index;
+						CPacket pack((BYTE*)pBuffer, size);//解析接收到的包
 						pack.hEvent = head.hEvent;
-						it->second.push_back(pack); //将解析出的包放入代表当前事件list队列
-						memmove(pBuffer, pBuffer + size, index - size);//将接收到的数据前移
-						index -= size; //接收到的数据长度减去已经处理的数据长度, 为下一次接收数据做准备
-						if (it0->second) {//如果自动关闭，就通知事件完成
-							SetEvent(head.hEvent);
+
+						if (size > 0) {//解析包成功， TODO:对于文件夹信息获取，文件信息获取可能产生问题
+							//通知对应的事件
+							pack.hEvent = head.hEvent;
+							it->second.push_back(pack); //将解析出的包放入代表当前事件list队列
+							memmove(pBuffer, pBuffer + size, index - size);//将接收到的数据前移
+							index -= size; //接收到的数据长度减去已经处理的数据长度, 为下一次接收数据做准备
+							if (it0->second) {//如果自动关闭，就通知事件完成
+								SetEvent(head.hEvent);
+							}
 						}
 					}
-				}
-				else if (length == 0 && index <= 0) {
-					CloseSocket();
-					SetEvent(head.hEvent);//等到服务器关闭命令后，再通知事件完成
-				}
-			} while (it0->second == false);//如果不自动关闭，就一直接收数据
-			
+					else if (length == 0 && index <= 0) {
+						CloseSocket();
+						SetEvent(head.hEvent);//等到服务器关闭命令后，再通知事件完成
+						m_mapAutoCLosed.erase(it0);
+						break;
+					}
+				} while (it0->second == false);//如果不自动关闭，就一直接收数据
+			}
 			m_lstSend.pop_front();//删除包
-			InitSocket();
+			if (InitSocket() == false) {
+				InitSocket();
+			}
 		}
 	}
 	CloseSocket();
