@@ -93,7 +93,9 @@ void CClientController::threadWatchScreen()
 	while (!m_isClosed) {
 		if (m_watchDlg.isFull() == false) {
 			std::list<CPacket> lstPacks;
-			int ret = SendCommandPacket(6, true, NULL, 0, &lstPacks);
+			int ret = SendCommandPacket(m_watchDlg.GetSafeHwnd(), 6, true, NULL, 0);
+			//TODO：添加消息响应函数WM_SEND_PACK_ACK
+			//TODO:控制发送频率
 			if (ret == 6) { //获取屏幕数据
 				if (CTool::Byte2Image(m_watchDlg.GetImage(), lstPacks.front().strData) == 0) { //将数据转换为图片，获取图片成功
 					m_watchDlg.SetImageStatus(true);//设置图片缓存有数据
@@ -127,7 +129,7 @@ void CClientController::threadDownloadFile()
 	}
 	CClientSocket* pClient = CClientSocket::getInstance();
 	do {
-		int ret = SendCommandPacket(4, false, (BYTE*)(LPCSTR)m_strRemote, m_strRemote.GetLength());
+		int ret = SendCommandPacket(m_remoteDlg, 4, false, (BYTE*)(LPCSTR)m_strRemote, m_strRemote.GetLength());
 		long long nLength = *(long long*)pClient->GetPacket().strData.c_str();//获取文件长度
 		if (nLength == 0) {
 			AfxMessageBox("文件长度为0或无法读取文件！！");

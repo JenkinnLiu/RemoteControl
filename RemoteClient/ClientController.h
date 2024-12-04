@@ -47,18 +47,10 @@ public:
 	// 9. 删除文件
 	// 1981. 测试连接
 	//返回值是命令号cmd, 如果小于0是错误
-	int SendCommandPacket(int nCmd, bool bAutoClose = true, BYTE* pData = NULL, size_t nLength = 0, std::list<CPacket>* plstPacks = nullptr) {
+	//hWnd是数据报收到后需要应答的窗口句柄
+	bool SendCommandPacket(HWND hWnd, int nCmd, bool bAutoClose = true, BYTE* pData = NULL, size_t nLength = 0) {
 		CClientSocket* pClient = CClientSocket::getInstance();
-		HANDLE hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);//创建一个事件
-		//TODO: 不应该直接发送，而是投入发送队列
-		std::list<CPacket> lstPacks;
-		if (plstPacks == NULL) plstPacks = &lstPacks;
-		pClient->SendPacket(CPacket(nCmd, pData, nLength, hEvent), *plstPacks, bAutoClose);
-		CloseHandle(hEvent);//回收事件句柄，防止资源耗尽
-		if (plstPacks->size() > 0) {
-			return plstPacks->front().sCmd;//返回命令号
-		}
-		return -1;
+		return pClient->SendPacket(hWnd, CPacket(nCmd, pData, nLength), bAutoClose);
 	}
 
 	int GetImage(CImage& image) {
