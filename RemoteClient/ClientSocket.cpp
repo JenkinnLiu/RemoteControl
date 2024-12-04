@@ -148,13 +148,20 @@ void CClientSocket::threadFunc()
 					else if (length == 0 && index <= 0) {
 						CloseSocket();
 						SetEvent(head.hEvent);//等到服务器关闭命令后，再通知事件完成
-						m_mapAutoCLosed.erase(it0);
+						if (it0 != m_mapAutoCLosed.end()) {
+							//m_mapAutoCLosed.erase(it0);
+						}
+						else {
+							TRACE("异常情况！没有找到事件！\r\n");
+						}
+						
 						break;
 					}
 				} while (it0->second == false || index > 0);//如果不自动关闭，就一直接收数据
 			}
 			m_lock.lock();//加锁,
 			m_lstSend.pop_front();//删除包
+			m_mapAutoCLosed.erase(head.hEvent);
 			m_lock.unlock();//解锁, 保证只有一个线程pop_front
 			if (InitSocket() == false) {
 				InitSocket();
@@ -166,6 +173,19 @@ void CClientSocket::threadFunc()
 
 }
 
+void CClientSocket::threadFunc2()
+{
+	MSG msg;
+	while (::GetMessage(&msg, NULL, 0, 0)) {
+		TranslateMessage(&msg);
+		DispatchMessageA(&msg);
+		if (m_mapFunc.find(msg.message) != m_mapFunc.end()) {//如果消息处理函数存在
+			MSGFUNC func = m_mapFunc[msg.message];	//获取消息处理函数
+			(this->*func)(msg.message, msg.wParam, msg.lParam);//用函数指针调用消息处理函数
+		}
+	}
+}
+
 bool CClientSocket::Send(const CPacket& pack)
 {
 	TRACE("向服务器send测试数据，m_sock == %d\r\n", m_sock);
@@ -173,4 +193,20 @@ bool CClientSocket::Send(const CPacket& pack)
 	std::string strOut;
 	pack.Data(strOut);
 	return send(m_sock, strOut.c_str(), strOut.size(), 0) > 0;
+}
+
+void CClientSocket::SendPack(UINT nMsg, WPARAM wParam, LPARAM lParam)
+{//定义一个消息的数据结构(数据和数据长度， 模式)， 回调消息的数据结构（HWND, MESSAGE）
+	if (InitSocket() == true) {
+		int ret = send(m_sock, (char*)wParam, (int)lParam, 0);
+		if (ret > 0) {
+
+		}
+		else {
+			CloseSocket();
+		}
+	}
+	else {
+		//TODO:错误处理
+	}
 }
