@@ -88,6 +88,7 @@ BEGIN_MESSAGE_MAP(CRemoteClientDlg, CDialogEx)
 	ON_WM_TIMER()
 	ON_EN_CHANGE(IDC_EDIT_PORT, &CRemoteClientDlg::OnEnChangeEditPort)
 	ON_NOTIFY(IPN_FIELDCHANGED, IDC_IPADDRESS_SERV, &CRemoteClientDlg::OnIpnFieldchangedIpaddressServ)
+	ON_MESSAGE(WM_SEND_PACK_ACK, &CRemoteClientDlg::OnSendPackAck)
 END_MESSAGE_MAP()
 
 
@@ -201,30 +202,9 @@ void CRemoteClientDlg::OnBnClickedBtnFileinfo()
 {
 	std::list<CPacket> lstPackets;
 	int ret = CClientController::getInstance()->SendCommandPacket(GetSafeHwnd(), true, NULL, 0);//发送命令数据1，请求磁盘信息,拿到盘符
-	if (ret == -1 || lstPackets.size() <= 0) {
+	if (ret == -1) {
 		AfxMessageBox(_T("命令处理失败"));
 		return;
-	}
-	CPacket& head = lstPackets.front(); //获取第一个数据包
-	std::string drivers = head.strData;//拿到盘符
-	std::string dr;
-	m_Tree.DeleteAllItems();//清空树
-	drivers += ',';//加一个逗号，方便最后一个盘符插入
-	for (size_t i = 0; i < drivers.size(); i ++) {
-		if (drivers[i] == ',') {
-			dr += ":";//将盘符后面的\0去掉,加分好
-			HTREEITEM hTemp = m_Tree.InsertItem(dr.c_str(), TVI_ROOT, TVI_LAST);//插入可用盘符, TVI_ROOT表示根节点，TVI_LAST表示最后一个节点,表示追加到根目录
-			m_Tree.InsertItem(NULL, hTemp, TVI_LAST);// 插入一个空节点,为的是可以双击树控件，获取文件信息
-			//"C:" "D:" "E:"
-			dr.clear();
-			continue;
-		}
-		dr += drivers[i];
-	}
-	if (dr.size() > 0) {
-		dr += ":";//将盘符后面的\0去掉,加分好 
-		HTREEITEM hTemp = m_Tree.InsertItem(dr.c_str(), TVI_ROOT, TVI_LAST);//插入可用盘符, TVI_ROOT表示根节点，TVI_LAST表示最后一个节点,表示追加到根目录
-		m_Tree.InsertItem(NULL, hTemp, TVI_LAST);// 插入一个空节点,为的是可以双击树控件，获取文件信息
 	}
 }
 
@@ -263,7 +243,7 @@ void CRemoteClientDlg::LoadFileInfo(){
 	m_LIst.DeleteAllItems();//清空文件列表
 	CString strPath = GetPath(hTreeSelected);
 	std::list<CPacket> lstPackets;
-	int nCmd = CClientController::getInstance()->SendCommandPacket(GetSafeHwnd(), 2, false, (BYTE*)(LPCSTR)strPath, strPath.GetLength());//查看指定目录下的文件
+	int nCmd = CClientController::getInstance()->SendCommandPacket(GetSafeHwnd(), 2, false, (BYTE*)(LPCSTR)strPath, strPath.GetLength(), (WPARAM)hTreeSelected);//查看指定目录下的文件
 	if (lstPackets.size() > 0) {
 		std::list<CPacket>::iterator it = lstPackets.begin();
 		for (; it != lstPackets.end(); it++) {
@@ -442,4 +422,96 @@ void CRemoteClientDlg::OnIpnFieldchangedIpaddressServ(NMHDR* pNMHDR, LRESULT* pR
 	UpdateData();
 	CClientController* pController = CClientController::getInstance();
 	pController->UpdateAddress(m_server_address, atoi((LPCTSTR)m_nPort));//更新网络服务器的地址
+}
+
+LRESULT CRemoteClientDlg::OnSendPackAck(WPARAM wParam, LPARAM lParam)
+{
+	if (lParam == -1 || lParam == -2) {
+		//TODO: 错误处理
+	}
+	else if (lParam == 1) {
+		//对方关闭了套接字
+	}
+	else {
+		CPacket* pPacket = (CPacket*)wParam;
+		if (pPacket != NULL) {
+			CPacket& head = *pPacket; //获取第一个数据包
+			switch (pPacket->sCmd) {
+			case 1: {//获取驱动信息
+				std::string drivers = head.strData;//拿到盘符
+				std::string dr;
+				m_Tree.DeleteAllItems();//清空树
+				drivers += ',';//加一个逗号，方便最后一个盘符插入
+				for (size_t i = 0; i < drivers.size(); i++) {
+					if (drivers[i] == ',') {
+						dr += ":";//将盘符后面的\0去掉,加分好
+						HTREEITEM hTemp = m_Tree.InsertItem(dr.c_str(), TVI_ROOT, TVI_LAST);//插入可用盘符, TVI_ROOT表示根节点，TVI_LAST表示最后一个节点,表示追加到根目录
+						m_Tree.InsertItem(NULL, hTemp, TVI_LAST);// 插入一个空节点,为的是可以双击树控件，获取文件信息
+						//"C:" "D:" "E:"
+						dr.clear();
+						continue;
+					}
+					dr += drivers[i];
+				}
+				if (dr.size() > 0) {
+					dr += ":";//将盘符后面的\0去掉,加分好 
+					HTREEITEM hTemp = m_Tree.InsertItem(dr.c_str(), TVI_ROOT, TVI_LAST);//插入可用盘符, TVI_ROOT表示根节点，TVI_LAST表示最后一个节点,表示追加到根目录
+					m_Tree.InsertItem(NULL, hTemp, TVI_LAST);// 插入一个空节点,为的是可以双击树控件，获取文件信息
+				}
+				break;
+			}
+			case 2: {//获取文件信息
+				PFILEINFO pInfo = (PFILEINFO)head.strData.c_str();//获取文件信息
+				if (pInfo->HasNext == FALSE) break;//如果没有下一个文件,则开始读下一个包
+				if (pInfo->IsDirectory) {
+					if (CString(pInfo->szFileName) == "." || (CString(pInfo->szFileName) == "..")) {
+						break;
+					}
+					HTREEITEM hTemp = m_Tree.InsertItem(pInfo->szFileName, (HTREEITEM)lParam, TVI_LAST);//插入文件pInfo->szFileName, hTreeSelected表示父节点，TVI_LAST表示最后一个节点
+					m_Tree.InsertItem("", hTemp, TVI_LAST);//插入一个空节点
+				}
+				else {//如果是文件
+					m_LIst.InsertItem(0, pInfo->szFileName);//插入文件名，0表示插入到第一个位置
+				}
+			}
+				  break;
+			case 3: {
+				TRACE("run file done!\r\n");
+			}
+				  break;
+			case 4: {
+				static LONGLONG length = 0, index = 0;
+				if (length == 0) {
+					length = *(long long*)head.strData.c_str();
+					if (length == 0) {
+						AfxMessageBox("文件长度为零或者无法读取文件！！！");
+						CClientController::getInstance()->DownloadEnd();//下载结束
+
+					}
+				}
+				else if (length > 0 && index >= length){
+					fclose((FILE*)lParam);
+					length = index = 0;
+					CClientController::getInstance()->DownloadEnd();
+				}
+				else {
+					FILE* pFile = (FILE*)lParam;
+					fwrite(head.strData.c_str(), 1, head.strData.size(), pFile);
+					index += head.strData.size();
+				}
+			}
+				 break;
+			case 9:
+				TRACE("delete successfully!\r\n");
+				break;
+			case 1981:
+				TRACE("test successfully!\r\n");
+				break;
+			default:
+				TRACE("unknown data received ! %d\r\n", head.sCmd);
+				break;
+			}
+		}
+	}
+	return 0;
 }

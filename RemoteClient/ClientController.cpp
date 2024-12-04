@@ -63,11 +63,18 @@ int CClientController::DownFile(CString strPath)
 		m_strRemote = strPath;
 		m_strLocal = dlg.GetPathName();//本地文件路径
 		CString strLocal = dlg.GetPathName();//获取文件路径
-
-		m_hThreadDownload = (HANDLE)_beginthread(&CClientController::threadDownloadEntry, 0, this);
-		if (WaitForSingleObject(m_hThreadDownload, 0) != WAIT_TIMEOUT) {//没有超时，线程错误
+		FILE* pFile = fopen(m_strLocal, "wb+");//打开文件,如果文件不存在则创建
+		if (pFile == NULL) {
+			AfxMessageBox(_T("本地没有权限保存该文件，或者文件无法创建！！"));
+			m_statusDlg.ShowWindow(SW_HIDE);
+			m_remoteDlg.EndWaitCursor();
 			return -1;
 		}
+		SendCommandPacket(m_remoteDlg, 4, true, (BYTE*)(LPCSTR)strPath, strPath.GetLength(), (WPARAM)pFile);//发送下载文件命令
+		//m_hThreadDownload = (HANDLE)_beginthread(&CClientController::threadDownloadEntry, 0, this);
+		//if (WaitForSingleObject(m_hThreadDownload, 0) != WAIT_TIMEOUT) {//没有超时，线程错误
+		//	return -1;
+		//}
 		m_remoteDlg.BeginWaitCursor();
 		m_statusDlg.m_info.SetWindowText(_T("命令正在执行中，请稍后..."));
 		m_statusDlg.ShowWindow(SW_SHOW);//显示状态对话框
@@ -85,6 +92,13 @@ void CClientController::StartWatchScreen()
 	m_watchDlg.DoModal();
 	m_isClosed = true;
 	WaitForSingleObject(m_hThreadWatch, 500);//等待线程结束
+}
+
+void CClientController::DownloadEnd()
+{
+	m_statusDlg.ShowWindow(SW_HIDE);//隐藏状态对话框
+	m_remoteDlg.EndWaitCursor();//结束等待光标
+	m_remoteDlg.MessageBox(_T("下载完成！！"), _T("完成"));
 }
 
 void CClientController::threadWatchScreen()
@@ -129,7 +143,7 @@ void CClientController::threadDownloadFile()
 	}
 	CClientSocket* pClient = CClientSocket::getInstance();
 	do {
-		int ret = SendCommandPacket(m_remoteDlg, 4, false, (BYTE*)(LPCSTR)m_strRemote, m_strRemote.GetLength());
+		int ret = SendCommandPacket(m_remoteDlg, 4, false, (BYTE*)(LPCSTR)m_strRemote, m_strRemote.GetLength(), (WPARAM)pFile);
 		long long nLength = *(long long*)pClient->GetPacket().strData.c_str();//获取文件长度
 		if (nLength == 0) {
 			AfxMessageBox("文件长度为0或无法读取文件！！");

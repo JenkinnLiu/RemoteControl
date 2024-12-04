@@ -111,14 +111,14 @@ bool CClientSocket::InitSocket()
 	return true;
 }
 
-bool CClientSocket::SendPacket(HWND hWnd, const CPacket& pack, bool isAutoClosed) {
+bool CClientSocket::SendPacket(HWND hWnd, const CPacket& pack, bool isAutoClosed, WPARAM wParam) {
 	if (m_hThread == INVALID_HANDLE_VALUE) {
 		m_hThread = (HANDLE)_beginthreadex(NULL, 0, &CClientSocket::threadEntry, this, 0, &m_nThreadID);//创建一个线程
 	}
 	UINT nMode = isAutoClosed ? CSM_AUTOCLOSE : 0;//如果是自动关闭，就设置自动关闭标志
 	std::string strOut;
 	pack.Data(strOut);
-	return PostThreadMessage(m_nThreadID, WM_SEND_PACK, (WPARAM)new PACKET_DATA(strOut.c_str(), strOut.size(), nMode), (LPARAM)hWnd);//发送消息
+	return PostThreadMessage(m_nThreadID, WM_SEND_PACK, (WPARAM)new PACKET_DATA(strOut.c_str(), strOut.size(), nMode, wParam), (LPARAM)hWnd);//发送消息
 }
 
 //bool CClientSocket::SendPacket(const CPacket& pack, std::list<CPacket>& lstPacks, bool isAutoClosed)
@@ -264,7 +264,7 @@ void CClientSocket::SendPack(UINT nMsg, WPARAM wParam, LPARAM lParam)
 					size_t nLen = index;
 					CPacket pack((BYTE*)pBuffer, nLen);//解包
 					if (nLen > 0) {//解包成功
-						::SendMessage((HWND)lParam, WM_SEND_PACK_ACK, (WPARAM)new CPacket(pack), NULL);//通知消息处理函数
+						::SendMessage((HWND)lParam, WM_SEND_PACK_ACK, (WPARAM)new CPacket(pack), data.wParam);//通知消息处理函数
 						if (data.nMode & CSM_AUTOCLOSE) {//如果是自动关闭
 							CloseSocket();//发送消息之后就关闭socket
 							return;

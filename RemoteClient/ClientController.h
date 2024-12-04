@@ -48,9 +48,9 @@ public:
 	// 1981. 测试连接
 	//返回值是命令号cmd, 如果小于0是错误
 	//hWnd是数据报收到后需要应答的窗口句柄
-	bool SendCommandPacket(HWND hWnd, int nCmd, bool bAutoClose = true, BYTE* pData = NULL, size_t nLength = 0) {
+	bool SendCommandPacket(HWND hWnd, int nCmd, bool bAutoClose = true, BYTE* pData = NULL, size_t nLength = 0, WPARAM wParam = 0) {
 		CClientSocket* pClient = CClientSocket::getInstance();
-		return pClient->SendPacket(hWnd, CPacket(nCmd, pData, nLength), bAutoClose);
+		return pClient->SendPacket(hWnd, CPacket(nCmd, pData, nLength), bAutoClose, wParam);
 	}
 
 	int GetImage(CImage& image) {
@@ -60,6 +60,7 @@ public:
 	}
 	int DownFile(CString strPath);
 	void StartWatchScreen();
+	void DownloadEnd();
 
 protected:
 	void threadWatchScreen();
