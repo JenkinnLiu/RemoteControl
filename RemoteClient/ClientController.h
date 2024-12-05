@@ -50,7 +50,8 @@ public:
 	//hWnd是数据报收到后需要应答的窗口句柄
 	bool SendCommandPacket(HWND hWnd, int nCmd, bool bAutoClose = true, BYTE* pData = NULL, size_t nLength = 0, WPARAM wParam = 0) {
 		CClientSocket* pClient = CClientSocket::getInstance();
-		return pClient->SendPacket(hWnd, CPacket(nCmd, pData, nLength), bAutoClose, wParam);
+		bool ret = pClient->SendPacket(hWnd, CPacket(nCmd, pData, nLength), bAutoClose, wParam);
+		return ret;
 	}
 
 	int GetImage(CImage& image) {

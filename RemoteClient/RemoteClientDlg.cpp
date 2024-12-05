@@ -23,15 +23,15 @@ class CAboutDlg : public CDialogEx
 public:
 	CAboutDlg();
 
-// 对话框数据
+	// 对话框数据
 #ifdef AFX_DESIGN_TIME
 	enum { IDD = IDD_ABOUTBOX };
 #endif
 
-	protected:
+protected:
 	virtual void DoDataExchange(CDataExchange* pDX);    // DDX/DDV 支持
 
-// 实现
+	// 实现
 protected:
 	DECLARE_MESSAGE_MAP()
 };
@@ -129,13 +129,13 @@ BOOL CRemoteClientDlg::OnInitDialog()
 	//游戏机是192.168.30.67，虚拟机是192.168.164.128
 	m_server_address = 0xC0A8A480;//设置默认IP地址,这里设的是虚拟机地址
 	m_nPort = "9527";//设置默认端口号
-	
+
 	CClientController* pController = CClientController::getInstance();
 	pController->UpdateAddress(m_server_address, atoi((LPCTSTR)m_nPort));//更新IP地址和端口号
 	UpdateData(FALSE);//将变量的值传给控件
 	m_dlgStatus.Create(IDD_DLG_STATUS, this);
 	m_dlgStatus.ShowWindow(SW_HIDE);//隐藏状态对话框
-	
+
 	return TRUE;  // 除非将焦点设置到控件，否则返回 TRUE
 }
 
@@ -209,7 +209,7 @@ void CRemoteClientDlg::OnBnClickedBtnFileinfo()
 }
 
 
-void CRemoteClientDlg::LoadFileCurrent(){
+void CRemoteClientDlg::LoadFileCurrent() {
 	HTREEITEM hTree = m_Tree.GetSelectedItem();
 	CString strPath = GetPath(hTree);
 	m_LIst.DeleteAllItems();//清空文件列表
@@ -230,7 +230,7 @@ void CRemoteClientDlg::LoadFileCurrent(){
 	CClientController::getInstance()->CloseSocket();
 }
 
-void CRemoteClientDlg::LoadFileInfo(){
+void CRemoteClientDlg::LoadFileInfo() {
 	CPoint ptMouse;
 	GetCursorPos(&ptMouse);//获取鼠标位置
 	m_Tree.ScreenToClient(&ptMouse);//将鼠标位置转换为树控件的客户区坐标
@@ -261,7 +261,7 @@ void CRemoteClientDlg::LoadFileInfo(){
 			}
 		}
 	}
-	
+
 	CClientController::getInstance()->CloseSocket();
 }
 
@@ -275,11 +275,11 @@ CString CRemoteClientDlg::GetPath(HTREEITEM hTree) {//获取路径
 	return strRet;
 }
 
-void CRemoteClientDlg::DeleteTreeChildrenItem(HTREEITEM hTree){
+void CRemoteClientDlg::DeleteTreeChildrenItem(HTREEITEM hTree) {
 	HTREEITEM hSub = NULL;
 	do {
 		hSub = m_Tree.GetChildItem(hTree);
-		if(hSub != NULL) m_Tree.DeleteItem(hSub);
+		if (hSub != NULL) m_Tree.DeleteItem(hSub);
 	} while (hSub != NULL);
 }
 
@@ -352,7 +352,7 @@ void CRemoteClientDlg::OnDownloadFile()
 		TRACE("下载失败！！, ret = %d\r\n", ret);
 	}
 	//添加线程函数
-	
+
 }
 
 
@@ -433,10 +433,10 @@ LRESULT CRemoteClientDlg::OnSendPackAck(WPARAM wParam, LPARAM lParam)
 		//对方关闭了套接字
 	}
 	else {
-		CPacket* pPacket = (CPacket*)wParam;
-		if (pPacket != NULL) {
-			CPacket& head = *pPacket; //获取第一个数据包
-			switch (pPacket->sCmd) {
+		if (wParam != NULL) {
+			CPacket head = *(CPacket*)wParam;
+			delete (CPacket*)wParam;
+			switch (head.sCmd) {
 			case 1: {//获取驱动信息
 				std::string drivers = head.strData;//拿到盘符
 				std::string dr;
@@ -489,7 +489,7 @@ LRESULT CRemoteClientDlg::OnSendPackAck(WPARAM wParam, LPARAM lParam)
 
 					}
 				}
-				else if (length > 0 && index >= length){
+				else if (length > 0 && index >= length) {
 					fclose((FILE*)lParam);
 					length = index = 0;
 					CClientController::getInstance()->DownloadEnd();
@@ -500,7 +500,7 @@ LRESULT CRemoteClientDlg::OnSendPackAck(WPARAM wParam, LPARAM lParam)
 					index += head.strData.size();
 				}
 			}
-				 break;
+				  break;
 			case 9:
 				TRACE("delete successfully!\r\n");
 				break;
@@ -512,6 +512,6 @@ LRESULT CRemoteClientDlg::OnSendPackAck(WPARAM wParam, LPARAM lParam)
 				break;
 			}
 		}
+		return 0;
 	}
-	return 0;
 }

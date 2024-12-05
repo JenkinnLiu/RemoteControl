@@ -54,6 +54,12 @@ m_hThread(INVALID_HANDLE_VALUE)
 		MessageBox(NULL, _T("无法初始化套接字环境,请检查网络设置！"), _T("初始化错误"), MB_OK | MB_ICONERROR);
 		exit(0);
 	}
+	m_eventInvoke = CreateEvent(NULL, TRUE, FALSE, NULL);//创建一个事件
+	m_hThread = (HANDLE)_beginthreadex(NULL, 0, &CClientSocket::threadEntry, this, 0, &m_nThreadID);//创建一个线程
+	if (WaitForSingleObject(m_eventInvoke, 100) == WAIT_TIMEOUT) {//等待事件
+		TRACE("网络消息处理线程启动失败！\r\n");
+	}
+	CloseHandle(m_eventInvoke);//关闭事件
 	m_buffer.resize(BUFFER_SIZE);
 	memset(m_buffer.data(), 0, BUFFER_SIZE);
 	//m_sock = socket(PF_INET, SOCK_STREAM, 0);//IPV4, TCP，服务端可以，客户端不行
@@ -112,13 +118,12 @@ bool CClientSocket::InitSocket()
 }
 
 bool CClientSocket::SendPacket(HWND hWnd, const CPacket& pack, bool isAutoClosed, WPARAM wParam) {
-	if (m_hThread == INVALID_HANDLE_VALUE) {
-		m_hThread = (HANDLE)_beginthreadex(NULL, 0, &CClientSocket::threadEntry, this, 0, &m_nThreadID);//创建一个线程
-	}
 	UINT nMode = isAutoClosed ? CSM_AUTOCLOSE : 0;//如果是自动关闭，就设置自动关闭标志
 	std::string strOut;
 	pack.Data(strOut);
-	return PostThreadMessage(m_nThreadID, WM_SEND_PACK, (WPARAM)new PACKET_DATA(strOut.c_str(), strOut.size(), nMode, wParam), (LPARAM)hWnd);//发送消息
+	bool ret = PostThreadMessage(m_nThreadID, WM_SEND_PACK, (WPARAM)new PACKET_DATA(strOut.c_str(), strOut.size(), nMode, wParam), (LPARAM)hWnd);//发送消息
+	
+	return ret;
 }
 
 //bool CClientSocket::SendPacket(const CPacket& pack, std::list<CPacket>& lstPacks, bool isAutoClosed)
@@ -226,6 +231,7 @@ unsigned CClientSocket::threadEntry(void* arg)
 
 void CClientSocket::threadFunc2()
 {
+	SetEvent(m_eventInvoke);//设置事件
 	MSG msg;
 	while (::GetMessage(&msg, NULL, 0, 0)) {
 		TranslateMessage(&msg);
