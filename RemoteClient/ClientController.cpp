@@ -71,10 +71,6 @@ int CClientController::DownFile(CString strPath)
 			return -1;
 		}
 		SendCommandPacket(m_remoteDlg, 4, true, (BYTE*)(LPCSTR)strPath, strPath.GetLength(), (WPARAM)pFile);//发送下载文件命令
-		//m_hThreadDownload = (HANDLE)_beginthread(&CClientController::threadDownloadEntry, 0, this);
-		//if (WaitForSingleObject(m_hThreadDownload, 0) != WAIT_TIMEOUT) {//没有超时，线程错误
-		//	return -1;
-		//}
 		m_remoteDlg.BeginWaitCursor();
 		m_statusDlg.m_info.SetWindowText(_T("命令正在执行中，请稍后..."));
 		m_statusDlg.ShowWindow(SW_SHOW);//显示状态对话框
@@ -171,6 +167,7 @@ void CClientController::threadDownloadFile()
 	m_statusDlg.ShowWindow(SW_HIDE);//隐藏状态对话框
 	m_remoteDlg.EndWaitCursor();//结束等待光标
 	m_remoteDlg.MessageBox(_T("下载完成！！"), _T("完成"));
+	m_remoteDlg.LoadFileInfo();//加载文件信息
 
 }
 

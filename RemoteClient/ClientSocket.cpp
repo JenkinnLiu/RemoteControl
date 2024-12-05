@@ -257,9 +257,12 @@ bool CClientSocket::Send(const CPacket& pack)
 
 void CClientSocket::SendPack(UINT nMsg, WPARAM wParam, LPARAM lParam)
 {//定义一个消息的数据结构(数据和数据长度， 模式)， 回调消息的数据结构（HWND, MESSAGE）
+	PACKET_DATA data = *(PACKET_DATA*)wParam;//将wParam转换为PACKET_DATA类型,获取发送数据
+	delete (PACKET_DATA*)wParam; //释放内存
+	size_t nTemp = data.strData.size();
+	CPacket current((BYTE*)data.strData.c_str(), nTemp);//解包
 	if (InitSocket() == true) {
-		PACKET_DATA data = *(PACKET_DATA*)wParam;//将wParam转换为PACKET_DATA类型,获取发送数据
-		delete (PACKET_DATA*)wParam; //释放内存
+		
 		int ret = send(m_sock, (char*)data.strData.c_str(), (int)data.strData.size(), 0);
 		if (ret > 0) {
 			size_t index = 0;
@@ -278,13 +281,13 @@ void CClientSocket::SendPack(UINT nMsg, WPARAM wParam, LPARAM lParam)
 							CloseSocket();//发送消息之后就关闭socket
 							return;
 						}
+						index -= nLen;
+						memmove(pBuffer, pBuffer + nLen, index);
 					}
-					index -= nLen;
-					memmove(pBuffer, pBuffer + index, nLen);
 				}
 				else {//TODO:对方关闭了套接字，或者网络设备异常
 					CloseSocket();
-					::SendMessage((HWND)lParam, WM_SEND_PACK_ACK, NULL, 1);//通知消息处理函数
+					::SendMessage((HWND)lParam, WM_SEND_PACK_ACK, (WPARAM)new CPacket(current.sCmd, NULL, 0), 1);//通知消息处理函数
 				}
 			}
 		}

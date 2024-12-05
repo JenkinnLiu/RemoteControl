@@ -26,8 +26,7 @@ public:
 	virtual void DoDataExchange(CDataExchange* pDX);	// DDX/DDV 支持
 
 public:
-	
-	
+	void LoadFileInfo();
 private:
 	CImage m_image;//图片缓存
 	bool m_isClosed;//监视是否关闭
@@ -35,7 +34,7 @@ private:
 	//static void threadEntryForDownFile(void* arg);
 	//void threadDownFile();
 	void LoadFileCurrent();//加载当前目录下的文件
-	void LoadFileInfo();
+	
 	CString GetPath(HTREEITEM hTree);//获取路径,让这个函数可以使用m_Tree
 	void DeleteTreeChildrenItem(HTREEITEM hTree);//删除树的子节点
 	

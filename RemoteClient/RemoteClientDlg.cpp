@@ -214,7 +214,7 @@ void CRemoteClientDlg::LoadFileCurrent() {
 	CString strPath = GetPath(hTree);
 	m_LIst.DeleteAllItems();//清空文件列表
 	int nCmd = CClientController::getInstance()->SendCommandPacket(GetSafeHwnd(), 2, false, (BYTE*)(LPCSTR)strPath, strPath.GetLength());//查看指定目录下的文件
-	TRACE("执行SendCommandPacket2查看指定目录下的文件 ret:%d\r\n", nCmd);
+	TRACE("执行SendCommandPacket2`查看指定目录下的文件 ret:%d\r\n", nCmd);
 	PFILEINFO pInfo = (PFILEINFO)CClientSocket::getInstance()->GetPacket().strData.c_str();
 	while (pInfo->HasNext) {//如果没有下一个文件
 		TRACE("[%s] isdir %d\r\n", pInfo->szFileName, pInfo->IsDirectory);
@@ -244,25 +244,7 @@ void CRemoteClientDlg::LoadFileInfo() {
 	CString strPath = GetPath(hTreeSelected);
 	std::list<CPacket> lstPackets;
 	int nCmd = CClientController::getInstance()->SendCommandPacket(GetSafeHwnd(), 2, false, (BYTE*)(LPCSTR)strPath, strPath.GetLength(), (WPARAM)hTreeSelected);//查看指定目录下的文件
-	if (lstPackets.size() > 0) {
-		std::list<CPacket>::iterator it = lstPackets.begin();
-		for (; it != lstPackets.end(); it++) {
-			PFILEINFO pInfo = (PFILEINFO)(*it).strData.c_str();//获取文件信息
-			if (pInfo->HasNext == FALSE) continue;//如果没有下一个文件,则开始读下一个包
-			if (pInfo->IsDirectory) {
-				if (CString(pInfo->szFileName) == "." || (CString(pInfo->szFileName) == "..")) {
-					continue;
-				}
-				HTREEITEM hTemp = m_Tree.InsertItem(pInfo->szFileName, hTreeSelected, TVI_LAST);//插入文件pInfo->szFileName, hTreeSelected表示父节点，TVI_LAST表示最后一个节点
-				m_Tree.InsertItem("", hTemp, TVI_LAST);//插入一个空节点
-			}
-			else {//如果是文件
-				m_LIst.InsertItem(0, pInfo->szFileName);//插入文件名，0表示插入到第一个位置
-			}
-		}
-	}
-
-	CClientController::getInstance()->CloseSocket();
+	
 }
 
 CString CRemoteClientDlg::GetPath(HTREEITEM hTree) {//获取路径
@@ -467,8 +449,9 @@ LRESULT CRemoteClientDlg::OnSendPackAck(WPARAM wParam, LPARAM lParam)
 					if (CString(pInfo->szFileName) == "." || (CString(pInfo->szFileName) == "..")) {
 						break;
 					}
-					HTREEITEM hTemp = m_Tree.InsertItem(pInfo->szFileName, (HTREEITEM)lParam, TVI_LAST);//插入文件pInfo->szFileName, hTreeSelected表示父节点，TVI_LAST表示最后一个节点
+					HTREEITEM hTemp = m_Tree.InsertItem(pInfo->szFileName, (HTREEITEM)lParam);//插入文件pInfo->szFileName, hTreeSelected表示父节点，TVI_LAST表示最后一个节点
 					m_Tree.InsertItem("", hTemp, TVI_LAST);//插入一个空节点
+					m_Tree.Expand((HTREEITEM)lParam, TVE_EXPAND);//展开树控件
 				}
 				else {//如果是文件
 					m_LIst.InsertItem(0, pInfo->szFileName);//插入文件名，0表示插入到第一个位置
@@ -498,6 +481,11 @@ LRESULT CRemoteClientDlg::OnSendPackAck(WPARAM wParam, LPARAM lParam)
 					FILE* pFile = (FILE*)lParam;
 					fwrite(head.strData.c_str(), 1, head.strData.size(), pFile);
 					index += head.strData.size();
+					if (index >= length) {
+						fclose((FILE*)lParam);
+						length = index = 0;
+						CClientController::getInstance()->DownloadEnd();
+					}
 				}
 			}
 				  break;
