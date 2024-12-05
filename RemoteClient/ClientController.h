@@ -24,7 +24,7 @@ public:
 	int Invoke(CWnd*& pMainWnd);
 
 	//发送消息
-	LRESULT SendMessage(MSG msg);
+	//LRESULT SendMessage(MSG msg);
 	//更新网络服务器的地址
 	void UpdateAddress(int nIP, int nPort) {
 		CClientSocket::getInstance()->UpdateAddress(nIP, nPort);	
@@ -66,15 +66,13 @@ public:
 protected:
 	void threadWatchScreen();
 	static void threadWatchScreen(void* arg);
-	void threadDownloadFile();
-	static void threadDownloadEntry(void* arg);
+	//void threadDownloadFile();
 	CClientController() :m_statusDlg(&m_remoteDlg), m_watchDlg(&m_remoteDlg) {
 		m_hThreadWatch = INVALID_HANDLE_VALUE;
-		m_hThreadDownload = INVALID_HANDLE_VALUE;
+		//m_hThreadDownload = INVALID_HANDLE_VALUE;
 		m_hThread = INVALID_HANDLE_VALUE;
 		m_nThreadID = -1;
 		m_isClosed = true;
-
 	}
 	~CClientController() {
 		WaitForSingleObject(m_hThread, 100);//这个函数的功能是等待一个线程的结束，直到线程结束后才返回

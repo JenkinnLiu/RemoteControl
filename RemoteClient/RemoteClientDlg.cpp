@@ -123,19 +123,7 @@ BOOL CRemoteClientDlg::OnInitDialog()
 	SetIcon(m_hIcon, TRUE);			// 设置大图标
 	SetIcon(m_hIcon, FALSE);		// 设置小图标
 
-	// TODO: 在此添加额外的初始化代码
-	UpdateData();//将控件的值传给变量
-	//m_server_address = 0x7F000001;//设置默认IP地址,0X7F000001是127.0.0.1的16进制表示，
-	//游戏机是192.168.30.67，虚拟机是192.168.164.128
-	m_server_address = 0xC0A8A480;//设置默认IP地址,这里设的是虚拟机地址
-	m_nPort = "9527";//设置默认端口号
-
-	CClientController* pController = CClientController::getInstance();
-	pController->UpdateAddress(m_server_address, atoi((LPCTSTR)m_nPort));//更新IP地址和端口号
-	UpdateData(FALSE);//将变量的值传给控件
-	m_dlgStatus.Create(IDD_DLG_STATUS, this);
-	m_dlgStatus.ShowWindow(SW_HIDE);//隐藏状态对话框
-
+	InitUIData();//初始化UI数据
 	return TRUE;  // 除非将焦点设置到控件，否则返回 TRUE
 }
 
@@ -209,6 +197,55 @@ void CRemoteClientDlg::OnBnClickedBtnFileinfo()
 }
 
 
+void CRemoteClientDlg::DealCommand(WORD nCmd,  const std::string& strData, LPARAM lParam)
+{
+	switch (nCmd) {
+	case 1: {//获取驱动信息
+		Str2Tree(strData, m_Tree);
+		break;
+	}
+	case 2: {//获取文件信息
+		PFILEINFO pInfo = (PFILEINFO)strData.c_str();//获取文件信息
+		UpdateFileInfo(*pInfo, (HTREEITEM)lParam);
+		break;
+	}
+
+	case 3: {
+		MessageBox("打开文件完成！！", "操作完成3  ！", MB_ICONINFORMATION);
+	}
+		  break;
+	case 4: {
+		UpdateDownloadFile(strData, (FILE*)lParam);
+		break;
+	}
+
+	case 9:
+		MessageBox("删除文件完成！！", "删除成功！", MB_ICONINFORMATION);
+		break;
+	case 1981:
+		MessageBox("连接测试成功！！", "连接成功！", MB_ICONINFORMATION);
+		break;
+	default:
+		TRACE("unknown data received ! %d\r\n", nCmd);
+		break;
+	}
+}
+
+void CRemoteClientDlg::InitUIData()
+{
+	UpdateData();//将控件的值传给变量
+	//m_server_address = 0x7F000001;//设置默认IP地址,0X7F000001是127.0.0.1的16进制表示，
+	//游戏机是192.168.30.67，虚拟机是192.168.164.128
+	m_server_address = 0xC0A8A480;//设置默认IP地址,这里设的是虚拟机地址
+	m_nPort = "9527";//设置默认端口号
+
+	CClientController* pController = CClientController::getInstance();
+	pController->UpdateAddress(m_server_address, atoi((LPCTSTR)m_nPort));//更新IP地址和端口号
+	UpdateData(FALSE);//将变量的值传给控件
+	m_dlgStatus.Create(IDD_DLG_STATUS, this);
+	m_dlgStatus.ShowWindow(SW_HIDE);//隐藏状态对话框
+}
+
 void CRemoteClientDlg::LoadFileCurrent() {
 	HTREEITEM hTree = m_Tree.GetSelectedItem();
 	CString strPath = GetPath(hTree);
@@ -230,6 +267,71 @@ void CRemoteClientDlg::LoadFileCurrent() {
 	CClientController::getInstance()->CloseSocket();
 }
 
+void CRemoteClientDlg::Str2Tree(const std::string& drivers, CTreeCtrl& tree)
+{
+	std::string dr;
+	tree.DeleteAllItems();//清空树
+	for (size_t i = 0; i < drivers.size(); i++) {
+		if (drivers[i] == ',') {
+			dr += ":";//将盘符后面的\0去掉,加分好
+			HTREEITEM hTemp = tree.InsertItem(dr.c_str(), TVI_ROOT, TVI_LAST);//插入可用盘符, TVI_ROOT表示根节点，TVI_LAST表示最后一个节点,表示追加到根目录
+			tree.InsertItem(NULL, hTemp, TVI_LAST);// 插入一个空节点,为的是可以双击树控件，获取文件信息
+			//"C:" "D:" "E:"
+			dr.clear();
+			continue;
+		}
+		dr += drivers[i];
+	}
+	if (dr.size() > 0) {
+		dr += ":";//将盘符后面的\0去掉,加分好 
+		HTREEITEM hTemp = tree.InsertItem(dr.c_str(), TVI_ROOT, TVI_LAST);//插入可用盘符, TVI_ROOT表示根节点，TVI_LAST表示最后一个节点,表示追加到根目录
+		tree.InsertItem(NULL, hTemp, TVI_LAST);// 插入一个空节点,为的是可以双击树控件，获取文件信息
+	}
+}
+
+void CRemoteClientDlg::UpdateFileInfo(FILEINFO& finfo, HTREEITEM hParent)
+{
+	if (finfo.HasNext == FALSE) return;//如果没有下一个文件,则开始读下一个包
+	if (finfo.IsDirectory) {
+		if (CString(finfo.szFileName) == "." || (CString(finfo.szFileName) == "..")) {
+			return;
+		}
+		HTREEITEM hTemp = m_Tree.InsertItem(finfo.szFileName, hParent);//插入文件pInfo->szFileName, hTreeSelected表示父节点，TVI_LAST表示最后一个节点
+		m_Tree.InsertItem("", hTemp, TVI_LAST);//插入一个空节点
+		m_Tree.Expand(hParent, TVE_EXPAND);//展开树控件
+	}
+	else {//如果是文件
+		m_LIst.InsertItem(0, finfo.szFileName);//插入文件名，0表示插入到第一个位置
+	}
+}
+
+void CRemoteClientDlg::UpdateDownloadFile(const std::string& strData, FILE* pFile)
+{
+	static LONGLONG length = 0, index = 0;
+	if (length == 0) {
+		length = *(long long*)strData.c_str();
+		if (length == 0) {
+			AfxMessageBox("文件长度为零或者无法读取文件！！！");
+			CClientController::getInstance()->DownloadEnd();//下载结束
+
+		}
+	}
+	else if (length > 0 && index >= length) {
+		fclose(pFile);
+		length = index = 0;
+		CClientController::getInstance()->DownloadEnd();
+	}
+	else {
+		fwrite(strData.c_str(), 1, strData.size(), pFile);
+		index += strData.size();
+		if (index >= length) {
+			fclose(pFile);
+			length = index = 0;
+			CClientController::getInstance()->DownloadEnd();
+		}
+	}
+}
+
 void CRemoteClientDlg::LoadFileInfo() {
 	CPoint ptMouse;
 	GetCursorPos(&ptMouse);//获取鼠标位置
@@ -237,8 +339,6 @@ void CRemoteClientDlg::LoadFileInfo() {
 	HTREEITEM hTreeSelected = m_Tree.HitTest(ptMouse, 0);//获取鼠标所在的树控件的节点
 	if (hTreeSelected == NULL)
 		return;
-	if (m_Tree.GetChildItem(hTreeSelected) == NULL)
-		return;//如果没有子节点,即双击的是文件，直接返回
 	DeleteTreeChildrenItem(hTreeSelected);//删除树控件的子节点,避免多次双击重复添加
 	m_LIst.DeleteAllItems();//清空文件列表
 	CString strPath = GetPath(hTreeSelected);
@@ -321,7 +421,6 @@ void CRemoteClientDlg::OnNMRClickListFile(NMHDR* pNMHDR, LRESULT* pResult)
 	}
 }
 
-
 void CRemoteClientDlg::OnDownloadFile()
 {
 	int nListSelected = m_LIst.GetSelectionMark();//获得选择标记
@@ -336,7 +435,6 @@ void CRemoteClientDlg::OnDownloadFile()
 	//添加线程函数
 
 }
-
 
 void CRemoteClientDlg::OnDeleteFile()
 {
@@ -410,6 +508,7 @@ LRESULT CRemoteClientDlg::OnSendPackAck(WPARAM wParam, LPARAM lParam)
 {
 	if (lParam == -1 || lParam == -2) {
 		//TODO: 错误处理
+		TRACE("socket is error %d \r\n", lParam);
 	}
 	else if (lParam == 1) {
 		//对方关闭了套接字
@@ -418,87 +517,8 @@ LRESULT CRemoteClientDlg::OnSendPackAck(WPARAM wParam, LPARAM lParam)
 		if (wParam != NULL) {
 			CPacket head = *(CPacket*)wParam;
 			delete (CPacket*)wParam;
-			switch (head.sCmd) {
-			case 1: {//获取驱动信息
-				std::string drivers = head.strData;//拿到盘符
-				std::string dr;
-				m_Tree.DeleteAllItems();//清空树
-				drivers += ',';//加一个逗号，方便最后一个盘符插入
-				for (size_t i = 0; i < drivers.size(); i++) {
-					if (drivers[i] == ',') {
-						dr += ":";//将盘符后面的\0去掉,加分好
-						HTREEITEM hTemp = m_Tree.InsertItem(dr.c_str(), TVI_ROOT, TVI_LAST);//插入可用盘符, TVI_ROOT表示根节点，TVI_LAST表示最后一个节点,表示追加到根目录
-						m_Tree.InsertItem(NULL, hTemp, TVI_LAST);// 插入一个空节点,为的是可以双击树控件，获取文件信息
-						//"C:" "D:" "E:"
-						dr.clear();
-						continue;
-					}
-					dr += drivers[i];
-				}
-				if (dr.size() > 0) {
-					dr += ":";//将盘符后面的\0去掉,加分好 
-					HTREEITEM hTemp = m_Tree.InsertItem(dr.c_str(), TVI_ROOT, TVI_LAST);//插入可用盘符, TVI_ROOT表示根节点，TVI_LAST表示最后一个节点,表示追加到根目录
-					m_Tree.InsertItem(NULL, hTemp, TVI_LAST);// 插入一个空节点,为的是可以双击树控件，获取文件信息
-				}
-				break;
-			}
-			case 2: {//获取文件信息
-				PFILEINFO pInfo = (PFILEINFO)head.strData.c_str();//获取文件信息
-				if (pInfo->HasNext == FALSE) break;//如果没有下一个文件,则开始读下一个包
-				if (pInfo->IsDirectory) {
-					if (CString(pInfo->szFileName) == "." || (CString(pInfo->szFileName) == "..")) {
-						break;
-					}
-					HTREEITEM hTemp = m_Tree.InsertItem(pInfo->szFileName, (HTREEITEM)lParam);//插入文件pInfo->szFileName, hTreeSelected表示父节点，TVI_LAST表示最后一个节点
-					m_Tree.InsertItem("", hTemp, TVI_LAST);//插入一个空节点
-					m_Tree.Expand((HTREEITEM)lParam, TVE_EXPAND);//展开树控件
-				}
-				else {//如果是文件
-					m_LIst.InsertItem(0, pInfo->szFileName);//插入文件名，0表示插入到第一个位置
-				}
-			}
-				  break;
-			case 3: {
-				TRACE("run file done!\r\n");
-			}
-				  break;
-			case 4: {
-				static LONGLONG length = 0, index = 0;
-				if (length == 0) {
-					length = *(long long*)head.strData.c_str();
-					if (length == 0) {
-						AfxMessageBox("文件长度为零或者无法读取文件！！！");
-						CClientController::getInstance()->DownloadEnd();//下载结束
-
-					}
-				}
-				else if (length > 0 && index >= length) {
-					fclose((FILE*)lParam);
-					length = index = 0;
-					CClientController::getInstance()->DownloadEnd();
-				}
-				else {
-					FILE* pFile = (FILE*)lParam;
-					fwrite(head.strData.c_str(), 1, head.strData.size(), pFile);
-					index += head.strData.size();
-					if (index >= length) {
-						fclose((FILE*)lParam);
-						length = index = 0;
-						CClientController::getInstance()->DownloadEnd();
-					}
-				}
-			}
-				  break;
-			case 9:
-				TRACE("delete successfully!\r\n");
-				break;
-			case 1981:
-				TRACE("test successfully!\r\n");
-				break;
-			default:
-				TRACE("unknown data received ! %d\r\n", head.sCmd);
-				break;
-			}
+			DealCommand(head.sCmd, head.strData, lParam);
+			
 		}
 		return 0;
 	}

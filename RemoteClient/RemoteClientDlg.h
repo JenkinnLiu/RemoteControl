@@ -33,7 +33,12 @@ private:
 
 	//static void threadEntryForDownFile(void* arg);
 	//void threadDownFile();
+	void DealCommand(WORD nCmd, const std::string& strData, LPARAM lParam);
+	void InitUIData();
 	void LoadFileCurrent();//加载当前目录下的文件
+	void Str2Tree(const std::string& driver, CTreeCtrl& tree);
+	void UpdateFileInfo(FILEINFO& finfo, HTREEITEM hParent);
+	void UpdateDownloadFile(const std::string& strData, FILE* pFile);
 	
 	CString GetPath(HTREEITEM hTree);//获取路径,让这个函数可以使用m_Tree
 	void DeleteTreeChildrenItem(HTREEITEM hTree);//删除树的子节点
