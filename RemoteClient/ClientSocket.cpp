@@ -121,8 +121,11 @@ bool CClientSocket::SendPacket(HWND hWnd, const CPacket& pack, bool isAutoClosed
 	UINT nMode = isAutoClosed ? CSM_AUTOCLOSE : 0;//如果是自动关闭，就设置自动关闭标志
 	std::string strOut;
 	pack.Data(strOut);
+	PACKET_DATA* pData = new PACKET_DATA(strOut.c_str(), strOut.size(), nMode, wParam);//创建一个PACKET_DATA结构
 	bool ret = PostThreadMessage(m_nThreadID, WM_SEND_PACK, (WPARAM)new PACKET_DATA(strOut.c_str(), strOut.size(), nMode, wParam), (LPARAM)hWnd);//发送消息
-	
+	if (ret == false) {
+		delete pData;
+	}
 	return ret;
 }
 

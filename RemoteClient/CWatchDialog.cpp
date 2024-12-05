@@ -114,27 +114,28 @@ LRESULT CWatchDialog::OnSendPackAck(WPARAM wParam, LPARAM lParam)
 	}
 	else {
 		CPacket* pPacket = (CPacket*)wParam;
-		if(pPacket != NULL) {
-			switch (pPacket->sCmd) {
+		if (pPacket != NULL) {
+			CPacket head = *(CPacket*)wParam;
+			delete (CPacket*)wParam;
+			switch (head.sCmd) {
 			case 6: {
-				if (m_isFull == true) {
-					CTool::Byte2Image(m_image, pPacket->strData);//将数据转换为图片
-					CRect rect;
-					m_picture.GetWindowRect(rect);//获取控件的矩形区域
-					//将图片显示到控件上，SRCCOPY表示直接拷贝，0， 0表示从左上角显示
-					//pParent->GetImage().BitBlt(m_picture.GetDC()->GetSafeHdc(), 0, 0, SRCCOPY); 
-					m_nObjWidth = m_image.GetWidth();//获取图片的宽度，设置成分辨率宽
-					m_nObjHeight = m_image.GetHeight();//获取图片的高度,设置成分辨率高
+				CTool::Byte2Image(m_image, pPacket->strData);//将数据转换为图片
+				CRect rect;
+				m_picture.GetWindowRect(rect);//获取控件的矩形区域
+				//将图片显示到控件上，SRCCOPY表示直接拷贝，0， 0表示从左上角显示
+				//pParent->GetImage().BitBlt(m_picture.GetDC()->GetSafeHdc(), 0, 0, SRCCOPY); 
+				m_nObjWidth = m_image.GetWidth();//获取图片的宽度，设置成分辨率宽
+				m_nObjHeight = m_image.GetHeight();//获取图片的高度,设置成分辨率高
 
-					m_image.StretchBlt(
-						m_picture.GetDC()->GetSafeHdc(), 0, 0, rect.Width(), rect.Height(), SRCCOPY);//缩放图片
-					m_picture.InvalidateRect(NULL);//刷新控件
-					m_image.Destroy();//销毁原来的图片
-					m_isFull = false;//缓存清空
-				}
+				m_image.StretchBlt(
+					m_picture.GetDC()->GetSafeHdc(), 0, 0, rect.Width(), rect.Height(), SRCCOPY);//缩放图片
+				m_picture.InvalidateRect(NULL);//刷新控件
+				m_image.Destroy();//销毁原来的图片
 				break;
 			}
 			case 5:
+				TRACE("远程端应答了鼠标事件\r\n");
+				break;
 			case 7:
 			case 8:
 			default:
@@ -157,7 +158,7 @@ void CWatchDialog::OnLButtonDblClk(UINT nFlags, CPoint point)
 		event.nAction = 2;//双击
 		//发送
 		CClientController::getInstance()->SendCommandPacket(GetSafeHwnd(), 5, true, (BYTE*)&event, sizeof event);
-		
+
 	}
 	CDialog::OnLButtonDblClk(nFlags, point);
 }
