@@ -17,6 +17,63 @@
 CWinApp theApp;
 using namespace std;
 
+void ChooseAutoInvoke() {//自动启动
+
+    
+    CString strSubKey = _T("\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run");
+	CString strInfo = _T("该程序只能用于合法的用途！");
+	strInfo += _T("继续运行该程序，将是的这台机器处于被监控状态！\n");
+	strInfo += _T("如果你不希望这样，请按“否”按钮，退出程序, 系统不会留下任何东西\n");
+	strInfo += _T("如果你希望继续，该程序将被复制到您的机器上，并随系统启动而自动运行！\n");
+	strInfo += _T("请问是否继续？");
+	int ret = MessageBox(NULL, strInfo, _T("警告"), MB_YESNOCANCEL | MB_ICONWARNING | MB_TOPMOST);
+	if (ret == IDCANCEL) {
+		exit(0);
+    }
+    else if (ret == IDOK) {
+        char sPath[MAX_PATH] = "";
+        char sSys[MAX_PATH] = "";
+		std::string strExe = "\\RemoteControl.exe ";
+        GetCurrentDirectoryA(MAX_PATH, sPath);
+        GetSystemDirectoryA(sSys, sizeof sSys);
+		std::string strCmd = "mklink " + std::string(sSys) + std::string(sPath) + "\\RemoteControl.exe";
+		system(strCmd.c_str());//执行命令
+        HKEY hKey = NULL;
+		ret = RegOpenKeyEx(HKEY_LOCAL_MACHINE, strSubKey, 0, KEY_ALL_ACCESS | KEY_WOW64_64KEY, &hKey);//打开注册表
+        if (ret != ERROR_SUCCESS) {
+            RegCloseKey(hKey);
+			MessageBox(NULL, _T("打开注册表失败！是否权限不足？"), _T("开机启动错误"), MB_OK | MB_ICONERROR);
+            exit(0);
+        }
+		CString strPath = CString(_T("%SystemRoot%\\SysWOW64\\RemoteControl.exe"));
+		int ret = RegSetValueEx(hKey, _T("RemoteControl"), 0, REG_SZ, (BYTE*)(LPCTSTR)strPath, strPath.GetLength() * sizeof (TCHAR));//写入注册表
+        if (ret != ERROR_SUCCESS) {
+            RegCloseKey(hKey);
+            MessageBox(NULL, _T("写入注册表失败！是否权限不足？"), _T("开机启动错误"), MB_OK | MB_ICONERROR);
+            exit(0);
+        }
+		RegCloseKey(hKey);//关闭注册表
+    }
+    //GPT版自动启动
+	/*HKEY hKey;*/
+	//if (RegOpenKeyEx(HKEY_LOCAL_MACHINE, _T("SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run"), 0, KEY_ALL_ACCESS, &hKey) == ERROR_SUCCESS) {//打开注册表
+	//	TCHAR szPath[MAX_PATH];
+	//	GetModuleFileName(NULL, szPath, MAX_PATH);
+	//	if (RegSetValueEx(hKey, _T("RemoteControl"), 0, REG_SZ, (LPBYTE)szPath, (lstrlen(szPath) + 1) * sizeof(TCHAR)) == ERROR_SUCCESS) {
+	//		MessageBox(NULL, _T("自动启动成功！"), _T("自动启动"), MB_OK | MB_ICONINFORMATION);
+	//	}
+	//	else {
+	//		MessageBox(NULL, _T("自动启动失败！"), _T("自动启动"), MB_OK | MB_ICONERROR);
+	//	}
+	//	RegCloseKey(hKey);
+	//}
+	//else {
+	//	MessageBox(NULL, _T("自动启动失败！"), _T("自动启动"), MB_OK | MB_ICONERROR);
+	//}
+
+
+}
+
 int main()
 {
     int nRetCode = 0;
