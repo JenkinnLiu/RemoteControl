@@ -17,10 +17,59 @@
 CWinApp theApp;
 using namespace std;
 
-void ChooseAutoInvoke() {//自动启动
-
-    
+void WriteRigisterTable() {
     CString strSubKey = _T("\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run");
+    CString strPath = CString(_T("C:\\Windows\\SysWOW64\\RemoteControl.exe"));
+    char sPath[MAX_PATH] = "";
+    char sSys[MAX_PATH] = "";
+    std::string strExe = "\\RemoteControl.exe ";
+    GetCurrentDirectoryA(MAX_PATH, sPath);
+    GetSystemDirectoryA(sSys, sizeof sSys);
+    std::string strCmd = "mklink " + std::string(sSys) + std::string(sPath) + "\\RemoteControl.exe";
+    system(strCmd.c_str());//执行命令
+    HKEY hKey = NULL;
+    int ret = RegOpenKeyEx(HKEY_LOCAL_MACHINE, strSubKey, 0, KEY_ALL_ACCESS | KEY_WOW64_64KEY, &hKey);//打开注册表
+    if (ret != ERROR_SUCCESS) {
+        RegCloseKey(hKey);
+        MessageBox(NULL, _T("打开注册表失败！是否权限不足？"), _T("开机启动错误"), MB_OK | MB_ICONERROR);
+        ::exit(0);
+    }
+
+    int ret = RegSetValueEx(hKey, _T("RemoteControl"), 0, REG_SZ, (BYTE*)(LPCTSTR)strPath, strPath.GetLength() * sizeof(TCHAR));//写入注册表
+    if (ret != ERROR_SUCCESS) {
+        RegCloseKey(hKey);
+        MessageBox(NULL, _T("写入注册表失败！是否权限不足？"), _T("开机启动错误"), MB_OK | MB_ICONERROR);
+        ::exit(0);
+    }
+    RegCloseKey(hKey);//关闭注册表
+}
+
+//开机启动的第二种方法，复制到Windows启动目录
+void WriteStartupDir(CString strPath) {
+    //CString strPath = _T("C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs\\StartUp\\RemoteControl.exe");
+    CString strCmd = GetCommandLine();
+	strCmd.Replace(_T("\""), _T(""));//把双引号去掉
+    BOOL ret = CopyFile(strCmd, strPath, FALSE);
+    //fopen CFile system(copy) CopyFile OpenFile
+    if (ret == FALSE) {
+		MessageBox(NULL, _T("复制文件失败！是否权限不足？"), _T("错误"), MB_OK | MB_ICONERROR);
+		::exit(0);
+    }
+}
+
+//开机权限是跟随启动用户的，如果两者权限不一致，可能会出现问题
+//开机启动环境变量有影响，如果依赖dll(动态库），则可能启动失败
+// //解决方法：
+//1.复制这些dll到system32下或者sysWOW64下，或者将程序放到系统目录下
+//system32下面多是64位的dll，sysWOW64下面多是32位的dll
+//2.使用静态库，而非动态库
+void ChooseAutoInvoke() {//自动启动
+	TCHAR wcsSystem[MAX_PATH] = _T("");
+    CString strPath = CString(_T("C:\\Windows\\SysWOW64\\RemoteControl.exe"));
+    if(PathFileExists(strPath)){
+        return;
+    }
+    
 	CString strInfo = _T("该程序只能用于合法的用途！");
 	strInfo += _T("继续运行该程序，将是的这台机器处于被监控状态！\n");
 	strInfo += _T("如果你不希望这样，请按“否”按钮，退出程序, 系统不会留下任何东西\n");
@@ -28,31 +77,11 @@ void ChooseAutoInvoke() {//自动启动
 	strInfo += _T("请问是否继续？");
 	int ret = MessageBox(NULL, strInfo, _T("警告"), MB_YESNOCANCEL | MB_ICONWARNING | MB_TOPMOST);
 	if (ret == IDCANCEL) {
-		exit(0);
+		::exit(0);
     }
     else if (ret == IDOK) {
-        char sPath[MAX_PATH] = "";
-        char sSys[MAX_PATH] = "";
-		std::string strExe = "\\RemoteControl.exe ";
-        GetCurrentDirectoryA(MAX_PATH, sPath);
-        GetSystemDirectoryA(sSys, sizeof sSys);
-		std::string strCmd = "mklink " + std::string(sSys) + std::string(sPath) + "\\RemoteControl.exe";
-		system(strCmd.c_str());//执行命令
-        HKEY hKey = NULL;
-		ret = RegOpenKeyEx(HKEY_LOCAL_MACHINE, strSubKey, 0, KEY_ALL_ACCESS | KEY_WOW64_64KEY, &hKey);//打开注册表
-        if (ret != ERROR_SUCCESS) {
-            RegCloseKey(hKey);
-			MessageBox(NULL, _T("打开注册表失败！是否权限不足？"), _T("开机启动错误"), MB_OK | MB_ICONERROR);
-            exit(0);
-        }
-		CString strPath = CString(_T("%SystemRoot%\\SysWOW64\\RemoteControl.exe"));
-		int ret = RegSetValueEx(hKey, _T("RemoteControl"), 0, REG_SZ, (BYTE*)(LPCTSTR)strPath, strPath.GetLength() * sizeof (TCHAR));//写入注册表
-        if (ret != ERROR_SUCCESS) {
-            RegCloseKey(hKey);
-            MessageBox(NULL, _T("写入注册表失败！是否权限不足？"), _T("开机启动错误"), MB_OK | MB_ICONERROR);
-            exit(0);
-        }
-		RegCloseKey(hKey);//关闭注册表
+		//WriteRigisterTable(strPath);//第一种方法
+		WriteStartupDir(strPath);//第二种方法
     }
     //GPT版自动启动
 	/*HKEY hKey;*/
