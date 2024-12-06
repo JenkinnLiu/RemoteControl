@@ -103,8 +103,44 @@ void ChooseAutoInvoke() {//自动启动
 
 }
 
+void ShowError() {
+    LPVOID lpMessageBuf = NULL;
+    //strerror(errno);//标准C语言库
+	FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_ALLOCATE_BUFFER,
+        NULL, GetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), 
+        (LPWSTR)&lpMessageBuf, 0, NULL);//windows API
+    OutputDebugString(lpMessageBuf);
+    LocalFree(lpMessageBuf);
+}
+
+bool IsAdmin() {//检测是否为管理员
+    HANDLE hToken = NULL;
+	if (!OpenProcessToken(GetCurrentProcess, TOKEN_QUERY, &hToken)) {//打开进程令牌,获取当前进程的访问令牌
+        ShowError();
+        return false;
+    }
+	TOKEN_ELEVATION eve;//提权令牌
+    DWORD len = 0;
+    if(GetTokenInformation(hToken, TokenElevation, &eve, sizeof(eve), &len) == false){//获取令牌信息
+        ShowError();
+        return false;
+    }
+    if (len == sizeof eve) {
+		CloseHandle(hToken);
+		return eve.TokenIsElevated;//当前令牌是否可以提权
+    }
+	TRACE("length of tokeninformation is %d\r\n", len);
+    return false;
+}
+
 int main()
 {
+    if (IsAdmin()) {
+        OutputDebugString(L"current is run as administartor!\r\n");
+    }
+    else {
+        OutputDebugString(L"current is not run as normal user!\r\n");
+    }
     int nRetCode = 0;
 
     HMODULE hModule = ::GetModuleHandle(nullptr);
