@@ -7,6 +7,7 @@
 #include "ServerSocket.h"
 #include "Tool.h"
 #include "Command.h"
+#include<conio.h>
 
 
 #ifdef _DEBUG
@@ -122,34 +123,131 @@ bool Init() {
     }
     return true;
 }
+HANDLE hIOCP = INVALID_HANDLE_VALUE;//IO Completion Port
+
+typedef struct IocpParam {
+	int nOperator;//操作
+	std::string strData;//数据
+	_beginthread_proc_type cbFunc;//回调函数
+    IocpParam(int op, const char* sData, _beginthread_proc_type cb = NULL) {
+		nOperator = op;
+        strData = sData;
+		cbFunc = cb;
+    }
+	IocpParam() {
+		nOperator = -1;
+	}
+}IOCP_PARAM;
+
+#define IOCP_LIST_ADD 0
+#define IOCP_LIST_PUSH 1
+#define IOCP_LIST_POP 2
+
+enum {
+    IocpListEmpty, 
+	IocpListPush,
+	IocpListPop
+};
+
+void threadQueueEntry(HANDLE hIOCP) {
+    std::list<std::string> lstString;
+	DWORD dwTransferred = 0;//传输的字节数
+	ULONG_PTR CompletionKey = 0;//传输的数据
+	OVERLAPPED* pOverlapped = NULL;//重叠结构
+    while (GetQueuedCompletionStatus(hIOCP, &dwTransferred, &CompletionKey, &pOverlapped, INFINITE)) {//唤醒IOCP，开始实现请求
+		if (dwTransferred == 0 && CompletionKey == NULL) {//线程结束退出
+            printf("thread is ready to exit!\r\n");
+            break;
+        }
+		IOCP_PARAM* pParam = (IOCP_PARAM*)CompletionKey;//获取传递的参数,CompletionKey是一个指针
+		if (pParam->nOperator == IocpListPush) {//如果是push操作
+			lstString.push_back(pParam->strData);//添加到list
+		}
+		else if (pParam->nOperator == IocpListPop) {//如果是pop操作
+            std::string * pStr = NULL;
+            if (lstString.size() > 0) {
+				std::string* pstr = new std::string(lstString.front());//取出list的第一个元素
+				lstString.pop_front();//删除第一个元素
+            }
+            if (pParam->cbFunc) {
+                pParam->cbFunc(pStr);
+            }
+        }
+        else if (pParam->nOperator == IocpListEmpty) {
+            lstString.clear();
+        }
+		delete pParam;//释放内存
+    }
+    _endthread();
+}
+
+void func(void* arg) {//回调函数
+    std::string* pstr = (std::string*)arg;
+    if (pstr != NULL) {
+        printf("pop frpm list:%s\r\n", arg);
+        delete pstr;
+    }
+    else {
+		printf("list is empty:NULL\r\n");
+    }
+}
 
 int main()
 {
-    if (CTool::IsAdmin()) {
-		if (!Init()) return 1;//初始化失败
-        OutputDebugString(L"current is run as administartor!\r\n");
-        //MessageBox(NULL, _T("管理员"), _T("用户状态"), 0);
-        CCommand cmd;
-		if (!ChooseAutoInvoke(INVOKE_PATH)) ::exit(0);//自动启动
-        //转换成void*类型是最好加一个强制类型转换reinterpret_cast<SOCKET_CALLBACK>
-        int ret = CServerSocket::getInstance()->Run(reinterpret_cast<SOCKET_CALLBACK>(&CCommand::RunCommand), &cmd);//run函数中调用了InitSocket
-        switch (ret) {
-        case -1:
-            MessageBox(NULL, _T("网络初始化异常，未能成功初始化，请检查网络状态！"), _T("网络初始化失败！"), MB_OK | MB_ICONERROR);
-            break;
-        case -2:
-            MessageBox(NULL, _T("多次无法正常接入用户，结束程序！"), _T("客户端连接失败！"), MB_OK | MB_ICONERROR);
-            break;
+    if (!Init()) return 1;//初始化失败
+    printf("press any key to exit!\r\n");
+    HANDLE hIOCP = INVALID_HANDLE_VALUE;    
+	hIOCP = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, NULL, 1);//创建IOCP,1表示只有一个线程处理, 允许多线程处理是与epoll的区别1
+	HANDLE hThread = (HANDLE)_beginthread(threadQueueEntry, 0, hIOCP);//创建一个线程，用于处理IOCP
+	
+    DWORD tick = GetTickCount64();
+	while (_kbhit() != 0) {//如果按下任意键,完成端口把请求和实现分离了，请求是由PostQueuedCompletionStatus函数发出的，实现是由GetQueuedCompletionStatus函数完成的
+		if (GetTickCount64() - tick > 1300) {//每隔1.3s读一次状态
+            PostQueuedCompletionStatus(hIOCP, sizeof IOCP_PARAM, (ULONG_PTR)new IOCP_PARAM(IocpListPop, "hellp world"), NULL);//传递端口的状态的句柄给hIOCP
+			tick = GetTickCount64();
+
         }
+		if (GetTickCount64() - tick > 2000) {//每隔2s写一次状态
+            
+			PostQueuedCompletionStatus(hIOCP, sizeof IOCP_PARAM, (ULONG_PTR)new IOCP_PARAM(IocpListPush, "hellp world"), NULL);//传递端口的状态的句柄给hIOCP
+			tick = GetTickCount64();//重新计时
+		}
+        Sleep(1);
     }
-    else {
-        OutputDebugString(L"current is not run as normal user!\r\n");
-        if (CTool::RunAsAdmin() == false) {
-            CTool::ShowError();
-            return 1;
-        }
-        //获取管理员权限，使用该权限创建进程
-        //MessageBox(NULL, _T("普通用户"), _T("用户状态"), 0);
-        return 0;
+    if (hIOCP != NULL) {//IOCP创建成功
+		PostQueuedCompletionStatus(hIOCP, 0, NULL, NULL);//唤醒IOCP,传递端口的状态的句柄给hIOCP
+		WaitForSingleObject(hIOCP, INFINITE);//等待IOCP的线程结束
     }
+    CloseHandle(hIOCP);
+	printf("exit done!\r\n");
+    ::exit(0);
+    
+
+  //  if (CTool::IsAdmin()) {
+		//if (!Init()) return 1;//初始化失败
+  //      OutputDebugString(L"current is run as administartor!\r\n");
+  //      //MessageBox(NULL, _T("管理员"), _T("用户状态"), 0);
+  //      CCommand cmd;
+		//if (!ChooseAutoInvoke(INVOKE_PATH)) ::exit(0);//自动启动
+  //      //转换成void*类型是最好加一个强制类型转换reinterpret_cast<SOCKET_CALLBACK>
+  //      int ret = CServerSocket::getInstance()->Run(reinterpret_cast<SOCKET_CALLBACK>(&CCommand::RunCommand), &cmd);//run函数中调用了InitSocket
+  //      switch (ret) {
+  //      case -1:
+  //          MessageBox(NULL, _T("网络初始化异常，未能成功初始化，请检查网络状态！"), _T("网络初始化失败！"), MB_OK | MB_ICONERROR);
+  //          break;
+  //      case -2:
+  //          MessageBox(NULL, _T("多次无法正常接入用户，结束程序！"), _T("客户端连接失败！"), MB_OK | MB_ICONERROR);
+  //          break;
+  //      }
+  //  }
+  //  else {
+  //      OutputDebugString(L"current is not run as normal user!\r\n");
+  //      if (CTool::RunAsAdmin() == false) {
+  //          CTool::ShowError();
+  //          return 1;
+  //      }
+  //      //获取管理员权限，使用该权限创建进程
+  //      //MessageBox(NULL, _T("普通用户"), _T("用户状态"), 0);
+  //      return 0;
+  //  }
 }
