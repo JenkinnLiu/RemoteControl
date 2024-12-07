@@ -8,7 +8,7 @@
 #include "Tool.h"
 #include "Command.h"
 #include<conio.h>
-#include<CQueue.h>
+#include "CQueue.h"
 
 
 #ifdef _DEBUG
@@ -126,10 +126,6 @@ bool Init() {
 }
 HANDLE hIOCP = INVALID_HANDLE_VALUE;//IO Completion Port
 
-
-
-
-
 #define IOCP_LIST_ADD 0
 #define IOCP_LIST_PUSH 1
 #define IOCP_LIST_POP 2
@@ -139,6 +135,21 @@ enum {
 	IocpListPush,
 	IocpListPop
 };
+
+typedef struct IocpParam {
+    int nOperator;//操作
+    std::string strData;//数据
+    _beginthread_proc_type cbFunc;//回调函数
+    HANDLE hEvent;//pop操作需要的事件
+    IocpParam(int op, const char* sData, _beginthread_proc_type cb = NULL) {
+        nOperator = op;
+        strData = sData;
+        cbFunc = cb;
+    }
+    IocpParam() {
+        nOperator = -1;
+    }
+}IOCP_PARAM;//POST Parameter, IOCP中用于传递参数的结构体
 
 void threadmain(HANDLE hIOCP) {
     std::list<std::string> lstString;
@@ -194,56 +205,45 @@ void func(void* arg) {//回调函数
     }
 }
 
-typedef struct IocpParam {
-    int nOperator;//操作
-    std::string strData;//数据
-    _beginthread_proc_type cbFunc;//回调函数
-    HANDLE hEvent;//pop操作需要的事件
-    IocpParam(int op, const char* sData, _beginthread_proc_type cb = NULL) {
-        nOperator = op;
-        strData = sData;
-		cbFunc = cb;
-    }
-    IocpParam() {
-        nOperator = -1;
-    }
-}IOCP_PARAM;//POST Parameter, IOCP中用于传递参数的结构体
-
 int main()
 {
     if (!Init()) return 1;//初始化失败
     printf("press any key to exit!\r\n");
-    HANDLE hIOCP = INVALID_HANDLE_VALUE;    
-	hIOCP = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, NULL, 1);//创建IOCP,1表示只有一个线程处理, 允许多线程处理是与epoll的区别1
-    if (hIOCP == NULL || hIOCP == INVALID_HANDLE_VALUE) {
-		printf("create IOCP failed! %d\r\n", GetLastError());
-		return 1;
-    }
-    HANDLE hThread = (HANDLE)_beginthread(threadQueueEntry, 0, hIOCP);//创建一个线程，用于处理IOCP
-	
-    ULONGLONG tick = GetTickCount64();
-	ULONGLONG tick0 = GetTickCount64();
-    int count = 0, count0 = 0;
+    CQueue<std::string> lstStrings;
+    ULONGLONG tick0 = GetTickCount64(), tick = GetTickCount64();
+ //   HANDLE hIOCP = INVALID_HANDLE_VALUE;    
+	//hIOCP = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, NULL, 1);//创建IOCP,1表示只有一个线程处理, 允许多线程处理是与epoll的区别1
+ //   if (hIOCP == NULL || hIOCP == INVALID_HANDLE_VALUE) {
+	//	printf("create IOCP failed! %d\r\n", GetLastError());
+	//	return 1;
+ //   }
+ //   HANDLE hThread = (HANDLE)_beginthread(threadQueueEntry, 0, hIOCP);//创建一个线程，用于处理IOCP
+	//
+ //   ULONGLONG tick = GetTickCount64();
+	//ULONGLONG tick0 = GetTickCount64();
+ //   int count = 0, count0 = 0;
+
 	while (_kbhit() != 0) {//如果按下任意键,完成端口把请求和实现分离了，请求是由PostQueuedCompletionStatus函数发出的，实现是由GetQueuedCompletionStatus函数完成的
 		if (GetTickCount64() - tick > 1300) {//每隔1.3s读一次状态
-            PostQueuedCompletionStatus(hIOCP, sizeof IOCP_PARAM, (ULONG_PTR)new IOCP_PARAM(IocpListPop, "hellp world", func), NULL);//传递端口的状态的句柄给hIOCP
-			tick = GetTickCount64();
-            count++;
+            //PostQueuedCompletionStatus(hIOCP, sizeof IOCP_PARAM, (ULONG_PTR)new IOCP_PARAM(IocpListPop, "hellp world", func), NULL);//传递端口的状态的句柄给hIOCP
+            lstStrings.PushBack("hello world");
+            tick0 = GetTickCount64();
         }
 		if (GetTickCount64() - tick0 > 2000) {//每隔2s写一次状态
-            
-			PostQueuedCompletionStatus(hIOCP, sizeof IOCP_PARAM, (ULONG_PTR)new IOCP_PARAM(IocpListPush, "hellp world"), NULL);//传递端口的状态的句柄给hIOCP
-			tick0 = GetTickCount64();//重新计时
-            count0++;
+            std::string str;
+			//PostQueuedCompletionStatus(hIOCP, sizeof IOCP_PARAM, (ULONG_PTR)new IOCP_PARAM(IocpListPush, "hellp world"), NULL);//传递端口的状态的句柄给hIOCP
+            lstStrings.PopFront(str);
+            tick0 = GetTickCount64();//重新计时
+			printf("pop from queue: %s\r\n", str.c_str());
 		}
         Sleep(1);
     }
-    if (hIOCP != NULL) {//IOCP创建成功
-		PostQueuedCompletionStatus(hIOCP, 0, NULL, NULL);//唤醒IOCP,传递端口的状态的句柄给hIOCP
-		WaitForSingleObject(hIOCP, INFINITE);//等待IOCP的线程结束
-    }
+  //  if (hIOCP != NULL) {//IOCP创建成功
+		//PostQueuedCompletionStatus(hIOCP, 0, NULL, NULL);//唤醒IOCP,传递端口的状态的句柄给hIOCP
+		//WaitForSingleObject(hIOCP, INFINITE);//等待IOCP的线程结束
+  //  }
     CloseHandle(hIOCP);
-	printf("exit done! count: %d, count0 %d\r\n", count, count0);
+	printf("exit done! %d", lstStrings.Size());
     ::exit(0);
     
 
