@@ -8,6 +8,7 @@
 #include "Tool.h"
 #include "Command.h"
 #include<conio.h>
+#include<CQueue.h>
 
 
 #ifdef _DEBUG
@@ -125,19 +126,9 @@ bool Init() {
 }
 HANDLE hIOCP = INVALID_HANDLE_VALUE;//IO Completion Port
 
-typedef struct IocpParam {
-	int nOperator;//操作
-	std::string strData;//数据
-	_beginthread_proc_type cbFunc;//回调函数
-    IocpParam(int op, const char* sData, _beginthread_proc_type cb = NULL) {
-		nOperator = op;
-        strData = sData;
-		cbFunc = cb;
-    }
-	IocpParam() {
-		nOperator = -1;
-	}
-}IOCP_PARAM;
+
+
+
 
 #define IOCP_LIST_ADD 0
 #define IOCP_LIST_PUSH 1
@@ -149,36 +140,47 @@ enum {
 	IocpListPop
 };
 
-void threadQueueEntry(HANDLE hIOCP) {
+void threadmain(HANDLE hIOCP) {
     std::list<std::string> lstString;
-	DWORD dwTransferred = 0;//传输的字节数
-	ULONG_PTR CompletionKey = 0;//传输的数据
-	OVERLAPPED* pOverlapped = NULL;//重叠结构
+    DWORD dwTransferred = 0;//传输的字节数
+    ULONG_PTR CompletionKey = 0;//传输的数据
+    OVERLAPPED* pOverlapped = NULL;//重叠结构
+    int count = 0, count0 = 0;
     while (GetQueuedCompletionStatus(hIOCP, &dwTransferred, &CompletionKey, &pOverlapped, INFINITE)) {//唤醒IOCP，开始实现请求
-		if (dwTransferred == 0 && CompletionKey == NULL) {//线程结束退出
+
+        if (dwTransferred == 0 && CompletionKey == NULL) {//线程结束退出
             printf("thread is ready to exit!\r\n");
             break;
         }
-		IOCP_PARAM* pParam = (IOCP_PARAM*)CompletionKey;//获取传递的参数,CompletionKey是一个指针
-		if (pParam->nOperator == IocpListPush) {//如果是push操作
-			lstString.push_back(pParam->strData);//添加到list
-		}
-		else if (pParam->nOperator == IocpListPop) {//如果是pop操作
-            std::string * pStr = NULL;
+        IOCP_PARAM* pParam = (IOCP_PARAM*)CompletionKey;//获取传递的参数,CompletionKey是一个指针
+        if (pParam->nOperator == IocpListPush) {//如果是push操作
+            lstString.push_back(pParam->strData);//添加到list
+            count++;
+        }
+        else if (pParam->nOperator == IocpListPop) {//如果是pop操作
+            std::string* pStr = NULL;
             if (lstString.size() > 0) {
-				std::string* pstr = new std::string(lstString.front());//取出list的第一个元素
-				lstString.pop_front();//删除第一个元素
+                std::string* pstr = new std::string(lstString.front());//取出list的第一个元素
+                lstString.pop_front();//删除第一个元素
             }
             if (pParam->cbFunc) {
                 pParam->cbFunc(pStr);
             }
+            count0++;
         }
         else if (pParam->nOperator == IocpListEmpty) {
             lstString.clear();
         }
-		delete pParam;//释放内存
+        delete pParam;//释放内存
+
     }
-    _endthread();
+    printf("list size:%d, push:%d, pop:%d\r\n", lstString.size(), count, count0);
+}
+
+void threadQueueEntry(HANDLE hIOCP) {
+    
+	threadmain(hIOCP);//这里要加一个线程函数，阻止内存泄漏，析构变量
+	_endthread();//代码到此为止，会导致本地变量无法调用析构吗，从而使得内存发生泄漏
 }
 
 void func(void* arg) {//回调函数
@@ -192,25 +194,47 @@ void func(void* arg) {//回调函数
     }
 }
 
+typedef struct IocpParam {
+    int nOperator;//操作
+    std::string strData;//数据
+    _beginthread_proc_type cbFunc;//回调函数
+    HANDLE hEvent;//pop操作需要的事件
+    IocpParam(int op, const char* sData, _beginthread_proc_type cb = NULL) {
+        nOperator = op;
+        strData = sData;
+		cbFunc = cb;
+    }
+    IocpParam() {
+        nOperator = -1;
+    }
+}IOCP_PARAM;//POST Parameter, IOCP中用于传递参数的结构体
+
 int main()
 {
     if (!Init()) return 1;//初始化失败
     printf("press any key to exit!\r\n");
     HANDLE hIOCP = INVALID_HANDLE_VALUE;    
 	hIOCP = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, NULL, 1);//创建IOCP,1表示只有一个线程处理, 允许多线程处理是与epoll的区别1
-	HANDLE hThread = (HANDLE)_beginthread(threadQueueEntry, 0, hIOCP);//创建一个线程，用于处理IOCP
+    if (hIOCP == NULL || hIOCP == INVALID_HANDLE_VALUE) {
+		printf("create IOCP failed! %d\r\n", GetLastError());
+		return 1;
+    }
+    HANDLE hThread = (HANDLE)_beginthread(threadQueueEntry, 0, hIOCP);//创建一个线程，用于处理IOCP
 	
-    DWORD tick = GetTickCount64();
+    ULONGLONG tick = GetTickCount64();
+	ULONGLONG tick0 = GetTickCount64();
+    int count = 0, count0 = 0;
 	while (_kbhit() != 0) {//如果按下任意键,完成端口把请求和实现分离了，请求是由PostQueuedCompletionStatus函数发出的，实现是由GetQueuedCompletionStatus函数完成的
 		if (GetTickCount64() - tick > 1300) {//每隔1.3s读一次状态
-            PostQueuedCompletionStatus(hIOCP, sizeof IOCP_PARAM, (ULONG_PTR)new IOCP_PARAM(IocpListPop, "hellp world"), NULL);//传递端口的状态的句柄给hIOCP
+            PostQueuedCompletionStatus(hIOCP, sizeof IOCP_PARAM, (ULONG_PTR)new IOCP_PARAM(IocpListPop, "hellp world", func), NULL);//传递端口的状态的句柄给hIOCP
 			tick = GetTickCount64();
-
+            count++;
         }
-		if (GetTickCount64() - tick > 2000) {//每隔2s写一次状态
+		if (GetTickCount64() - tick0 > 2000) {//每隔2s写一次状态
             
 			PostQueuedCompletionStatus(hIOCP, sizeof IOCP_PARAM, (ULONG_PTR)new IOCP_PARAM(IocpListPush, "hellp world"), NULL);//传递端口的状态的句柄给hIOCP
-			tick = GetTickCount64();//重新计时
+			tick0 = GetTickCount64();//重新计时
+            count0++;
 		}
         Sleep(1);
     }
@@ -219,7 +243,7 @@ int main()
 		WaitForSingleObject(hIOCP, INFINITE);//等待IOCP的线程结束
     }
     CloseHandle(hIOCP);
-	printf("exit done!\r\n");
+	printf("exit done! count: %d, count0 %d\r\n", count, count0);
     ::exit(0);
     
 
