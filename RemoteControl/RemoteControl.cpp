@@ -224,12 +224,12 @@ int main()
  //   int count = 0, count0 = 0;
 
 	while (_kbhit() != 0) {//如果按下任意键,完成端口把请求和实现分离了，请求是由PostQueuedCompletionStatus函数发出的，实现是由GetQueuedCompletionStatus函数完成的
-		if (GetTickCount64() - tick > 1300) {//每隔1.3s读一次状态
+		if (GetTickCount64() - tick > 13) {//每隔13ms读一次状态
             //PostQueuedCompletionStatus(hIOCP, sizeof IOCP_PARAM, (ULONG_PTR)new IOCP_PARAM(IocpListPop, "hellp world", func), NULL);//传递端口的状态的句柄给hIOCP
             lstStrings.PushBack("hello world");
             tick0 = GetTickCount64();
         }
-		if (GetTickCount64() - tick0 > 2000) {//每隔2s写一次状态
+		if (GetTickCount64() - tick0 > 20) {//每隔2ms写一次状态
             std::string str;
 			//PostQueuedCompletionStatus(hIOCP, sizeof IOCP_PARAM, (ULONG_PTR)new IOCP_PARAM(IocpListPush, "hellp world"), NULL);//传递端口的状态的句柄给hIOCP
             lstStrings.PopFront(str);

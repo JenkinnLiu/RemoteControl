@@ -5,7 +5,7 @@
 #include "EdoyunThread.h"
 
 template<class T>
-class CEdoyunQueue
+class CQueue
 {//线程安全的队列（利用IOCP实现）
 public:
 	enum {
@@ -29,22 +29,22 @@ public:
 		}
 	}PPARAM;//Post Parameter 用于投递信息的结构体
 public:
-	CEdoyunQueue() {
+	CQueue() {
 		m_lock = false;
-		m_hCompeletionPort = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, NULL, 1);
+		m_hCompeletionPort = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, NULL, 1);//创建一个IOCP
 		m_hThread = INVALID_HANDLE_VALUE;
 		if (m_hCompeletionPort != NULL) {
 			m_hThread = (HANDLE)_beginthread(
-				&CEdoyunQueue<T>::threadEntry,
+				&CQueue<T>::threadEntry,
 				0, this
-			);
+			); //创建一个线程
 		}
 	}
-	virtual ~CEdoyunQueue() {
+	virtual ~CQueue() { //析构函数
 		if (m_lock)return;
-		m_lock = true;
-		PostQueuedCompletionStatus(m_hCompeletionPort, 0, NULL, NULL);
-		WaitForSingleObject(m_hThread, INFINITE);
+		m_lock = true; //设置锁
+		PostQueuedCompletionStatus(m_hCompeletionPort, 0, NULL, NULL); //通知线程退出
+		WaitForSingleObject(m_hThread, INFINITE); //等待线程退出
 		if (m_hCompeletionPort != NULL) {
 			HANDLE hTemp = m_hCompeletionPort;
 			m_hCompeletionPort = NULL;
@@ -52,31 +52,31 @@ public:
 		}
 	}
 	bool PushBack(const T& data) {
-		IocpParam* pParam = new IocpParam(EQPush, data);
-		if (m_lock) {
+		IocpParam* pParam = new IocpParam(EQPush, data); //创建一个投递参数
+		if (m_lock) { //如果正在析构
 			delete pParam;
 			return false;
 		}
-		bool ret = PostQueuedCompletionStatus(m_hCompeletionPort, sizeof(PPARAM), (ULONG_PTR)pParam, NULL);
-		if (ret == false)delete pParam;
+		bool ret = PostQueuedCompletionStatus(m_hCompeletionPort, sizeof(PPARAM), (ULONG_PTR)pParam, NULL); //向IOCP投递信息
+		if (ret == false)delete pParam; //投递失败，释放内存
 		//printf("push back done %d %08p\r\n", ret, (void*)pParam);
 		return ret;
 	}
 	virtual bool PopFront(T& data) {
-		HANDLE hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
+		HANDLE hEvent = CreateEvent(NULL, TRUE, FALSE, NULL); //创建一个事件
 		IocpParam Param(EQPop, data, hEvent);
-		if (m_lock) {
+		if (m_lock) { //如果正在析构
 			if (hEvent)CloseHandle(hEvent);
 			return false;
 		}
-		bool ret = PostQueuedCompletionStatus(m_hCompeletionPort, sizeof(PPARAM), (ULONG_PTR)&Param, NULL);
-		if (ret == false) {
+		bool ret = PostQueuedCompletionStatus(m_hCompeletionPort, sizeof(PPARAM), (ULONG_PTR)&Param, NULL); //向IOCP投递信息
+		if (ret == false) { //投递失败
 			CloseHandle(hEvent);
 			return false;
 		}
-		ret = WaitForSingleObject(hEvent, INFINITE) == WAIT_OBJECT_0;
+		ret = WaitForSingleObject(hEvent, INFINITE) == WAIT_OBJECT_0; //等待事件，直到有数据，这里用WaitForSingleObject是为了防止线程占用
 		if (ret) {
-			data = Param.Data;
+			data = Param.Data;//获取数据
 		}
 		return ret;
 	}
@@ -108,7 +108,7 @@ public:
 	}
 protected:
 	static void threadEntry(void* arg) {
-		CEdoyunQueue<T>* thiz = (CEdoyunQueue<T>*)arg;
+		CQueue<T>* thiz = (CQueue<T>*)arg;
 		thiz->threadMain();
 		_endthread();
 	}
@@ -122,7 +122,7 @@ protected:
 			break;
 		case EQPop:
 			if (m_lstData.size() > 0) {
-				pParam->Data = m_lstData.front();
+				pParam->Data = m_lstData.front();//获取pop的数据
 				m_lstData.pop_front();
 			}
 			if (pParam->hEvent != NULL)SetEvent(pParam->hEvent);
@@ -151,14 +151,14 @@ protected:
 			m_hCompeletionPort,
 			&dwTransferred,
 			&CompletionKey,
-			&pOverlapped, INFINITE))
+			&pOverlapped, INFINITE)) //等待IOCP通知,实现IOCP
 		{
 			if ((dwTransferred == 0) || (CompletionKey == NULL)) {
 				printf("thread is prepare to exit!\r\n");
 				break;
 			}
 
-			pParam = (PPARAM*)CompletionKey;
+			pParam = (PPARAM*)CompletionKey;//获取参数
 			DealParam(pParam);
 		}
 		while (GetQueuedCompletionStatus(
@@ -188,12 +188,12 @@ protected:
 
 
 template<class T>
-class EdoyunSendQueue :public CEdoyunQueue<T>, public ThreadFuncBase
+class EdoyunSendQueue :public CQueue<T>, public ThreadFuncBase
 {
 public:
 	typedef int (ThreadFuncBase::* EDYCALLBACK)(T& data);
 	EdoyunSendQueue(ThreadFuncBase* obj, EDYCALLBACK callback)
-		:CEdoyunQueue<T>(), m_base(obj), m_callback(callback)
+		:CQueue<T>(), m_base(obj), m_callback(callback)
 	{
 		m_thread.Start();
 		m_thread.UpdateWorker(::ThreadWorker(this, (FUNCTYPE)&EdoyunSendQueue<T>::threadTick));
@@ -207,12 +207,12 @@ protected:
 		return false;
 	};
 	bool PopFront() {
-		typename CEdoyunQueue<T>::IocpParam* Param = new typename CEdoyunQueue<T>::IocpParam(CEdoyunQueue<T>::EQPop, T());
-		if (CEdoyunQueue<T>::m_lock) {
+		typename CQueue<T>::IocpParam* Param = new typename CQueue<T>::IocpParam(CQueue<T>::EQPop, T());
+		if (CQueue<T>::m_lock) {
 			delete Param;
 			return false;
 		}
-		bool ret = PostQueuedCompletionStatus(CEdoyunQueue<T>::m_hCompeletionPort, sizeof(typename CEdoyunQueue<T>::PPARAM), (ULONG_PTR)&Param, NULL);
+		bool ret = PostQueuedCompletionStatus(CQueue<T>::m_hCompeletionPort, sizeof(typename CQueue<T>::PPARAM), (ULONG_PTR)&Param, NULL);
 		if (ret == false) {
 			delete Param;
 			return false;
@@ -220,35 +220,35 @@ protected:
 		return ret;
 	}
 	int threadTick() {
-		if (CEdoyunQueue<T>::m_lstData.size() > 0) {
+		if (CQueue<T>::m_lstData.size() > 0) {
 			PopFront();
 		}
 		Sleep(1);
 		return 0;
 	}
-	virtual void DealParam(typename CEdoyunQueue<T>::PPARAM* pParam) {
+	virtual void DealParam(typename CQueue<T>::PPARAM* pParam) {
 		switch (pParam->nOperator)
 		{
-		case CEdoyunQueue<T>::EQPush:
-			CEdoyunQueue<T>::m_lstData.push_back(pParam->Data);
+		case CQueue<T>::EQPush:
+			CQueue<T>::m_lstData.push_back(pParam->Data);
 			delete pParam;
 			//printf("delete %08p\r\n", (void*)pParam);
 			break;
-		case CEdoyunQueue<T>::EQPop:
-			if (CEdoyunQueue<T>::m_lstData.size() > 0) {
-				pParam->Data = CEdoyunQueue<T>::m_lstData.front();
+		case CQueue<T>::EQPop:
+			if (CQueue<T>::m_lstData.size() > 0) {
+				pParam->Data = CQueue<T>::m_lstData.front();
 				if ((m_base->*m_callback)(pParam->Data) == 0)
-					CEdoyunQueue<T>::m_lstData.pop_front();
+					CQueue<T>::m_lstData.pop_front();
 			}
 			delete pParam;
 			break;
-		case CEdoyunQueue<T>::EQSize:
-			pParam->nOperator = CEdoyunQueue<T>::m_lstData.size();
+		case CQueue<T>::EQSize:
+			pParam->nOperator = CQueue<T>::m_lstData.size();
 			if (pParam->hEvent != NULL)
 				SetEvent(pParam->hEvent);
 			break;
-		case CEdoyunQueue<T>::EQClear:
-			CEdoyunQueue<T>::m_lstData.clear();
+		case CQueue<T>::EQClear:
+			CQueue<T>::m_lstData.clear();
 			delete pParam;
 			//printf("delete %08p\r\n", (void*)pParam);
 			break;
