@@ -9,6 +9,8 @@
 #include "Command.h"
 #include<conio.h>
 #include "CQueue.h"
+#include<MSWSock.h>
+#include "CServer.h"
 
 
 #ifdef _DEBUG
@@ -41,26 +43,26 @@ void WriteRigisterTable() {
         ::exit(0);
     }
 
-    ret = RegSetValueEx(hKey, _T("RemoteControl"), 0, REG_SZ, (BYTE*)(LPCTSTR)strPath, strPath.GetLength() * sizeof(TCHAR));//写入注册表
-    if (ret != ERROR_SUCCESS) {
-        RegCloseKey(hKey);
-        MessageBox(NULL, _T("写入注册表失败！是否权限不足？"), _T("开机启动错误"), MB_OK | MB_ICONERROR);
-        ::exit(0);
-    }
-    RegCloseKey(hKey);//关闭注册表
+ret = RegSetValueEx(hKey, _T("RemoteControl"), 0, REG_SZ, (BYTE*)(LPCTSTR)strPath, strPath.GetLength() * sizeof(TCHAR));//写入注册表
+if (ret != ERROR_SUCCESS) {
+    RegCloseKey(hKey);
+    MessageBox(NULL, _T("写入注册表失败！是否权限不足？"), _T("开机启动错误"), MB_OK | MB_ICONERROR);
+    ::exit(0);
+}
+RegCloseKey(hKey);//关闭注册表
 }
 
 //开机启动的第二种方法，复制到Windows启动目录
 void WriteStartupDir(CString strPath) {
-	
+
     TCHAR sPath[MAX_PATH] = _T("");
     GetModuleFileName(NULL, sPath, MAX_PATH);
     //CString strPath = _T("C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs\\StartUp\\RemoteControl.exe");
     BOOL ret = CopyFile(sPath, strPath, FALSE);
     //fopen CFile system(copy) CopyFile OpenFile
     if (ret == FALSE) {
-		MessageBox(NULL, _T("复制文件失败！是否权限不足？"), _T("错误"), MB_OK | MB_ICONERROR);
-		::exit(0);
+        MessageBox(NULL, _T("复制文件失败！是否权限不足？"), _T("错误"), MB_OK | MB_ICONERROR);
+        ::exit(0);
     }
 }
 
@@ -71,51 +73,51 @@ void WriteStartupDir(CString strPath) {
 //system32下面多是64位的dll，sysWOW64下面多是32位的dll
 //2.使用静态库，而非动态库
 bool ChooseAutoInvoke(const CString& strPath) {//自动启动
-	TCHAR wcsSystem[MAX_PATH] = _T("");
+    TCHAR wcsSystem[MAX_PATH] = _T("");
     //CString strPath = CString(_T("C:\\Windows\\SysWOW64\\RemoteControl.exe"));
-    if(PathFileExists(strPath)){
+    if (PathFileExists(strPath)) {
         return false;
     }
-    
-	CString strInfo = _T("该程序只能用于合法的用途！");
-	strInfo += _T("继续运行该程序，将是的这台机器处于被监控状态！\n");
-	strInfo += _T("如果你不希望这样，请按“否”按钮，退出程序, 系统不会留下任何东西\n");
-	strInfo += _T("如果你希望继续，该程序将被复制到您的机器上，并随系统启动而自动运行！\n");
-	strInfo += _T("请问是否继续？");
-	int ret = MessageBox(NULL, strInfo, _T("警告"), MB_YESNOCANCEL | MB_ICONWARNING | MB_TOPMOST);
-	if (ret == IDCANCEL) {
+
+    CString strInfo = _T("该程序只能用于合法的用途！");
+    strInfo += _T("继续运行该程序，将是的这台机器处于被监控状态！\n");
+    strInfo += _T("如果你不希望这样，请按“否”按钮，退出程序, 系统不会留下任何东西\n");
+    strInfo += _T("如果你希望继续，该程序将被复制到您的机器上，并随系统启动而自动运行！\n");
+    strInfo += _T("请问是否继续？");
+    int ret = MessageBox(NULL, strInfo, _T("警告"), MB_YESNOCANCEL | MB_ICONWARNING | MB_TOPMOST);
+    if (ret == IDCANCEL) {
         return false;
     }
     else if (ret == IDOK) {
-		//WriteRigisterTable(strPath);//第一种方法
-		WriteStartupDir(strPath);//第二种方法
+        //WriteRigisterTable(strPath);//第一种方法
+        WriteStartupDir(strPath);//第二种方法
     }
     return true;
     //GPT版自动启动
-	/*HKEY hKey;*/
-	//if (RegOpenKeyEx(HKEY_LOCAL_MACHINE, _T("SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run"), 0, KEY_ALL_ACCESS, &hKey) == ERROR_SUCCESS) {//打开注册表
-	//	TCHAR szPath[MAX_PATH];
-	//	GetModuleFileName(NULL, szPath, MAX_PATH);
-	//	if (RegSetValueEx(hKey, _T("RemoteControl"), 0, REG_SZ, (LPBYTE)szPath, (lstrlen(szPath) + 1) * sizeof(TCHAR)) == ERROR_SUCCESS) {
-	//		MessageBox(NULL, _T("自动启动成功！"), _T("自动启动"), MB_OK | MB_ICONINFORMATION);
-	//	}
-	//	else {
-	//		MessageBox(NULL, _T("自动启动失败！"), _T("自动启动"), MB_OK | MB_ICONERROR);
-	//	}
-	//	RegCloseKey(hKey);
-	//}
-	//else {
-	//	MessageBox(NULL, _T("自动启动失败！"), _T("自动启动"), MB_OK | MB_ICONERROR);
-	//}
+    /*HKEY hKey;*/
+    //if (RegOpenKeyEx(HKEY_LOCAL_MACHINE, _T("SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run"), 0, KEY_ALL_ACCESS, &hKey) == ERROR_SUCCESS) {//打开注册表
+    //	TCHAR szPath[MAX_PATH];
+    //	GetModuleFileName(NULL, szPath, MAX_PATH);
+    //	if (RegSetValueEx(hKey, _T("RemoteControl"), 0, REG_SZ, (LPBYTE)szPath, (lstrlen(szPath) + 1) * sizeof(TCHAR)) == ERROR_SUCCESS) {
+    //		MessageBox(NULL, _T("自动启动成功！"), _T("自动启动"), MB_OK | MB_ICONINFORMATION);
+    //	}
+    //	else {
+    //		MessageBox(NULL, _T("自动启动失败！"), _T("自动启动"), MB_OK | MB_ICONERROR);
+    //	}
+    //	RegCloseKey(hKey);
+    //}
+    //else {
+    //	MessageBox(NULL, _T("自动启动失败！"), _T("自动启动"), MB_OK | MB_ICONERROR);
+    //}
 }
 
 
 bool Init() {
     HMODULE hModule = ::GetModuleHandle(nullptr);
-	if (hModule == nullptr) {
+    if (hModule == nullptr) {
         wprintf(L"错误: MFC 初始化失败\n");
-		return false;
-	}
+        return false;
+    }
     if (!AfxWinInit(hModule, nullptr, ::GetCommandLine(), 0))
     {
         // TODO: 在此处为应用程序的行为编写代码。
@@ -124,128 +126,75 @@ bool Init() {
     }
     return true;
 }
-HANDLE hIOCP = INVALID_HANDLE_VALUE;//IO Completion Port
 
-#define IOCP_LIST_ADD 0
-#define IOCP_LIST_PUSH 1
-#define IOCP_LIST_POP 2
+class COverlapped {
+public:
+    OVERLAPPED m_overlapped;
+    DWORD m_operator;
+	char m_buffer[4096];
+    COverlapped() {
+        m_operator = 0;
+		memset(&m_overlapped, 0, sizeof m_overlapped);
+        memset(&m_buffer, 0, sizeof m_buffer);
 
-enum {
-    IocpListEmpty, 
-	IocpListPush,
-	IocpListPop
+    }
 };
 
-typedef struct IocpParam {
-    int nOperator;//操作
-    std::string strData;//数据
-    _beginthread_proc_type cbFunc;//回调函数
-    HANDLE hEvent;//pop操作需要的事件
-    IocpParam(int op, const char* sData, _beginthread_proc_type cb = NULL) {
-        nOperator = op;
-        strData = sData;
-        cbFunc = cb;
-    }
-    IocpParam() {
-        nOperator = -1;
-    }
-}IOCP_PARAM;//POST Parameter, IOCP中用于传递参数的结构体
+void iocp() {
+	CServer server;
+	server.StartService();//启动服务
+    getchar();
+    //SOCKET sock = socket(AF_INET, SOCK_STREAM, 0);//TCP
+ //   SOCKET sock = WSASocket(AF_INET, SOCK_STREAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED);
+ //   if (sock == INVALID_SOCKET) {
+ //       CTool::ShowError();
+ //       return;
+ //   }
+	//HANDLE hIOCP = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, sock, 4);//创建IOCP,最多4个线程,这里的sock是监听套接字
+ //   SOCKET client = WSASocket(AF_INET, SOCK_STREAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED);
+	//CreateIoCompletionPort((HANDLE)sock, hIOCP, 0, 0);// 将sock绑定到IOCP上
+ //   sockaddr_in addr;
+ //   addr.sin_family = PF_INET;//协议族
+ //   addr.sin_addr.s_addr = inet_addr("0.0.0.0");//地址
+ //   addr.sin_port = htons(9527);//端口
+	//bind(sock, (sockaddr*)&addr, sizeof addr);//绑定
+	//listen(sock, 5);//监听
+ //   COverlapped overlapped;//重叠结构
+	//overlapped.m_operator = 1;//accept操作
+ //   memset(&overlapped, 0, sizeof OVERLAPPED);//初始化
+ //   DWORD received = 0;//接收到的字节数
+ //   //下面地址要加16个字节，因为AcceptEx函数会在地址后面加16个字节的数据
+ //   if (AcceptEx(sock, client, overlapped.m_buffer, 0, sizeof(sockaddr_in) + 16, sizeof(sockaddr_in) + 16, &received, &overlapped.m_overlapped) == FALSE) {// 这里的
+ //       CTool::ShowError();
+ //       return;
+ //   }
+ //   overlapped.m_operator = 2;
+ //   WSASend();
+ //   overlapped.m_operator = 3;
+	//WSARecv();
+ //   while (true) {//代表一个线程
+	//	DWORD transferred = 0;//传输的字节数
+	//	DWORD key = 0; //关键字
+	//	LPOVERLAPPED pOverlapped = NULL;//重叠结构
+ //       if (GetQueuedCompletionStatus(hIOCP, &transferred, &key, &pOverlapped, INFINITE)) {//如果收到IOCP消息
+	//		COverlapped* pO = CONTAINING_RECORD(pOverlapped, COverlapped, m_overlapped);//用CONTAINING_RECORD获取重叠结构的父类,拿到重叠结构的结构体的指针，来看看socket的操作
+ //           switch (pO->m_operator) {
+ //           case 1: {
+	//			//处理accept操作
+ //           }
 
-void threadmain(HANDLE hIOCP) {
-    std::list<std::string> lstString;
-    DWORD dwTransferred = 0;//传输的字节数
-    ULONG_PTR CompletionKey = 0;//传输的数据
-    OVERLAPPED* pOverlapped = NULL;//重叠结构
-    int count = 0, count0 = 0;
-    while (GetQueuedCompletionStatus(hIOCP, &dwTransferred, &CompletionKey, &pOverlapped, INFINITE)) {//唤醒IOCP，开始实现请求
+ //           }
+ //          
+ //       }
+ //   }
 
-        if (dwTransferred == 0 && CompletionKey == NULL) {//线程结束退出
-            printf("thread is ready to exit!\r\n");
-            break;
-        }
-        IOCP_PARAM* pParam = (IOCP_PARAM*)CompletionKey;//获取传递的参数,CompletionKey是一个指针
-        if (pParam->nOperator == IocpListPush) {//如果是push操作
-            lstString.push_back(pParam->strData);//添加到list
-            count++;
-        }
-        else if (pParam->nOperator == IocpListPop) {//如果是pop操作
-            std::string* pStr = NULL;
-            if (lstString.size() > 0) {
-                std::string* pstr = new std::string(lstString.front());//取出list的第一个元素
-                lstString.pop_front();//删除第一个元素
-            }
-            if (pParam->cbFunc) {
-                pParam->cbFunc(pStr);
-            }
-            count0++;
-        }
-        else if (pParam->nOperator == IocpListEmpty) {
-            lstString.clear();
-        }
-        delete pParam;//释放内存
-
-    }
-    printf("list size:%d, push:%d, pop:%d\r\n", lstString.size(), count, count0);
-}
-
-void threadQueueEntry(HANDLE hIOCP) {
-    
-	threadmain(hIOCP);//这里要加一个线程函数，阻止内存泄漏，析构变量
-	_endthread();//代码到此为止，会导致本地变量无法调用析构吗，从而使得内存发生泄漏
-}
-
-void func(void* arg) {//回调函数
-    std::string* pstr = (std::string*)arg;
-    if (pstr != NULL) {
-        printf("pop frpm list:%s\r\n", arg);
-        delete pstr;
-    }
-    else {
-		printf("list is empty:NULL\r\n");
-    }
+ //   
 }
 
 int main()
 {
     if (!Init()) return 1;//初始化失败
-    printf("press any key to exit!\r\n");
-    CQueue<std::string> lstStrings;
-    ULONGLONG tick0 = GetTickCount64(), tick = GetTickCount64();
- //   HANDLE hIOCP = INVALID_HANDLE_VALUE;    
-	//hIOCP = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, NULL, 1);//创建IOCP,1表示只有一个线程处理, 允许多线程处理是与epoll的区别1
- //   if (hIOCP == NULL || hIOCP == INVALID_HANDLE_VALUE) {
-	//	printf("create IOCP failed! %d\r\n", GetLastError());
-	//	return 1;
- //   }
- //   HANDLE hThread = (HANDLE)_beginthread(threadQueueEntry, 0, hIOCP);//创建一个线程，用于处理IOCP
-	//
- //   ULONGLONG tick = GetTickCount64();
-	//ULONGLONG tick0 = GetTickCount64();
- //   int count = 0, count0 = 0;
-
-	while (_kbhit() != 0) {//如果按下任意键,完成端口把请求和实现分离了，请求是由PostQueuedCompletionStatus函数发出的，实现是由GetQueuedCompletionStatus函数完成的
-		if (GetTickCount64() - tick > 13) {//每隔13ms读一次状态
-            //PostQueuedCompletionStatus(hIOCP, sizeof IOCP_PARAM, (ULONG_PTR)new IOCP_PARAM(IocpListPop, "hellp world", func), NULL);//传递端口的状态的句柄给hIOCP
-            lstStrings.PushBack("hello world");
-            tick0 = GetTickCount64();
-        }
-		if (GetTickCount64() - tick0 > 20) {//每隔2ms写一次状态
-            std::string str;
-			//PostQueuedCompletionStatus(hIOCP, sizeof IOCP_PARAM, (ULONG_PTR)new IOCP_PARAM(IocpListPush, "hellp world"), NULL);//传递端口的状态的句柄给hIOCP
-            lstStrings.PopFront(str);
-            tick0 = GetTickCount64();//重新计时
-			printf("pop from queue: %s\r\n", str.c_str());
-		}
-        Sleep(1);
-    }
-  //  if (hIOCP != NULL) {//IOCP创建成功
-		//PostQueuedCompletionStatus(hIOCP, 0, NULL, NULL);//唤醒IOCP,传递端口的状态的句柄给hIOCP
-		//WaitForSingleObject(hIOCP, INFINITE);//等待IOCP的线程结束
-  //  }
-    CloseHandle(hIOCP);
-	printf("exit done! %d", lstStrings.Size());
-    ::exit(0);
-    
+    iocp();
 
   //  if (CTool::IsAdmin()) {
 		//if (!Init()) return 1;//初始化失败
