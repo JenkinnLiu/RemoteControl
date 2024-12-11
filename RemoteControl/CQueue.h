@@ -2,7 +2,7 @@
 #include "pch.h"
 #include <atomic>
 #include <list>
-#include "EdoyunThread.h"
+#include "CThread.h"
 
 template<class T>
 class CQueue
@@ -191,14 +191,14 @@ template<class T>
 class EdoyunSendQueue :public CQueue<T>, public ThreadFuncBase
 {
 public:
-	typedef int (ThreadFuncBase::* EDYCALLBACK)(T& data);
+	typedef int (ThreadFuncBase::* EDYCALLBACK)(T& data);//回调函数
 	EdoyunSendQueue(ThreadFuncBase* obj, EDYCALLBACK callback)
 		:CQueue<T>(), m_base(obj), m_callback(callback)
 	{
 		m_thread.Start();
 		m_thread.UpdateWorker(::ThreadWorker(this, (FUNCTYPE)&EdoyunSendQueue<T>::threadTick));
 	}
-	virtual ~EdoyunSendQueue() {
+	virtual ~EdoyunSendQueue() {//虚析构函数，这里用虚析构函数用于释放父类资源
 		m_base = NULL;
 		m_callback = NULL;
 	}

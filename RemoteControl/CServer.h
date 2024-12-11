@@ -142,7 +142,7 @@ class CServer :
 	public ThreadFuncBase
 {
 public:
-	CServer(const std::string& ip = "0.0.0.0", short port = 9527) :m_pool(10) {//线程池最多10个线程
+	CServer(const std::string& ip = "0.0.0.0", short port = 9527) :m_pool(10) {//1.1 线程池最多10个线程
 		m_hIOCP = INVALID_HANDLE_VALUE;
 		m_sock = INVALID_SOCKET;
 		m_addr.sin_family = AF_INET;
@@ -180,8 +180,10 @@ private:
 		if (WSAStartup(MAKEWORD(2, 2), &data) != 0) {
 			return;
 		}
+		//2.1 调用WSASocket创建socket
 		m_sock = WSASocket(PF_INET, SOCK_STREAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED);
 		int opt = 1;
+		//2.2 设置socket属性，SOL_SOCKET表示设置的是socket级别的属性，SO_REUSEADDR表示允许重用本地地址和端口
 		setsockopt(m_sock, SOL_SOCKET, SO_REUSEADDR, (const char*)&opt, sizeof(opt));
 	}
 	int threadIocp();

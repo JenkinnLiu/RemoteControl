@@ -190,12 +190,56 @@ void iocp() {
 
  //   
 }
-
-int main()
+void udp_server() {
+	printf("%s(%d):%s\r\n", __FILE__, __LINE__, __FUNCTION__);//打印文件名，行号，函数名
+    getchar();
+}
+void udp_client(bool ishost = true) {
+	if (ishost) {//主机
+        printf("%s(%d):%s\r\n", __FILE__, __LINE__, __FUNCTION__);
+    }
+    else {
+        printf("%s(%d):%s\r\n", __FILE__, __LINE__, __FUNCTION__);
+    }
+}
+//int wmain(int argc, TCHAR* argv[]);//wmain是宽字符版本的入口函数
+//int _tmain(int argc, TCHAR* argv[]);//_tmain是宽字符版本的入口函数,根据UNICODE宏定义来选择是窄字符还是宽字符
+int main(int argc, char* argv[])
 {
     if (!Init()) return 1;//初始化失败
-    iocp();
-
+    //iocp();
+    if (argc == 1) {
+        char wstrDir[MAX_PATH];
+		GetCurrentDirectoryA(MAX_PATH, wstrDir);//获取当前目录
+		STARTUPINFOA si;//启动信息
+		PROCESS_INFORMATION pi; //进程信息
+        memset(&si, 0, sizeof si);
+        memset(&pi, 0, sizeof pi);
+        string strCmd = argv[0];
+        strCmd += " 1";
+        //创建进程1, 用新的控制台, 用当前目录
+		BOOL bRet = CreateProcessA(NULL, (LPSTR)strCmd.c_str(), NULL, NULL, FALSE, CREATE_NEW_CONSOLE, NULL, wstrDir, &si, &pi);
+        if (bRet) {
+			CloseHandle(pi.hThread);//关闭线程
+			CloseHandle(pi.hProcess);//关闭进程
+			TRACE("进程ID：%d\r\n", pi.dwProcessId);
+			TRACE("线程ID：%d\r\n", pi.dwThreadId);
+            strCmd += " 2";
+			//创建进程2,
+            bRet = CreateProcessA(NULL, (LPSTR)strCmd.c_str(), NULL, NULL, FALSE, CREATE_NEW_CONSOLE, NULL, wstrDir, &si, &pi);
+            if (bRet) {
+                CloseHandle(pi.hThread);//关闭线程
+                CloseHandle(pi.hProcess);//关闭进程
+                TRACE("进程ID：%d\r\n", pi.dwProcessId);
+                TRACE("线程ID：%d\r\n", pi.dwThreadId);
+                udp_server();//创建服务器
+            }
+        }
+        
+    }
+    else if (argc == 2) {
+		udp_client(false);//客户端,不是主机
+	}
   //  if (CTool::IsAdmin()) {
 		//if (!Init()) return 1;//初始化失败
   //      OutputDebugString(L"current is run as administartor!\r\n");

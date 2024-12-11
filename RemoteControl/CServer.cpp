@@ -25,6 +25,7 @@ int AcceptOverlapped<op>::AcceptWorker() {//接收连接的工作函数
 			memcpy(m_client->GetLocalAddr(), pLocalAddr, sizeof(sockaddr_in));//拷贝本地和远程地址
 		memcpy(m_client->GetRemoteAddr(), pRemoteAddr, sizeof(sockaddr_in));
 		m_server->BindNewSocket(*m_client, (ULONG_PTR)m_client);// 绑定新的socket，将新的socket绑定到IOCP上
+		//这里的WSARecv是异步接收，是要申请接收数据，然后申请之后再接收的
 		int ret = WSARecv((SOCKET)*m_client, m_client->RecvWSABuffer(), 1, *m_client, &m_client->flags(), m_client->RecvOverlapped(), NULL);//开始接收数据
 		if (ret == SOCKET_ERROR && (WSAGetLastError() != WSA_IO_PENDING)) {
 			//TODO:报错
@@ -55,7 +56,7 @@ inline RecvOverlapped<op>::RecvOverlapped() {//接收数据的overlapped结构
 }
 
 
-EdoyunClient::EdoyunClient()
+EdoyunClient::EdoyunClient()//构造函数初始化了客户端对象的各种成员，包括 overlapped 结构、socket 和缓冲区。
 	:m_isbusy(false), m_flags(0),
 	m_overlapped(new ACCEPTOVERLAPPED()),
 	m_recv(new RECVOVERLAPPED()),
@@ -126,7 +127,7 @@ int EdoyunClient::SendData(std::vector<char>& data)
 {
 	if (m_vecSend.Size() > 0) {
 		int ret = WSASend(m_sock, SendWSABuffer(), 1, &m_received, m_flags, &m_send->m_overlapped, NULL);
-		if (ret != 0 && WSAGetLastError() != WSA_IO_PENDING) {
+		if (ret != 0 && WSAGetLastError() != WSA_IO_PENDING) {//发送失败，WSA_IO_PENDING表示异步操作正在进行中
 			CTool::ShowError();
 			return ret;
 		}
@@ -143,10 +144,12 @@ CServer::~CServer()
 	}
 	m_client.clear();
 }
-
+//1. 启动服务
 bool CServer::StartService()//启动服务
-{
+{	//1.启动CServer的构造函数
+	//2. 创建socket
 	CreateSocket();
+	//3. bind和listen
 	if (bind(m_sock, (sockaddr*)&m_addr, sizeof(m_addr)) == -1) {
 		closesocket(m_sock);
 		m_sock = INVALID_SOCKET;
@@ -157,17 +160,18 @@ bool CServer::StartService()//启动服务
 		m_sock = INVALID_SOCKET;
 		return false;
 	}
-	m_hIOCP = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 4);
+	//4. 创建IOCP
+	m_hIOCP = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 4);//创建IOCP
 	if (m_hIOCP == NULL) {
 		closesocket(m_sock);
 		m_sock = INVALID_SOCKET;
 		m_hIOCP = INVALID_HANDLE_VALUE;
 		return false;
 	}
-	CreateIoCompletionPort((HANDLE)m_sock, m_hIOCP, (ULONG_PTR)this, 0); //将监听套接字绑定到IOCP上
-	m_pool.Invoke(); //启动线程池
-	m_pool.DispatchWorker(ThreadWorker(this, (FUNCTYPE)&CServer::threadIocp)); //线程池分配线程工作对象
-	if (!NewAccept())return false;
+	CreateIoCompletionPort((HANDLE)m_sock, m_hIOCP, (ULONG_PTR)this, 0); //5. 将监听套接字绑定到IOCP上
+	m_pool.Invoke(); //6. 启动线程池
+	m_pool.DispatchWorker(ThreadWorker(this, (FUNCTYPE)&CServer::threadIocp)); //7. 线程池分配线程工作对象
+	if (!NewAccept())return false; //8. 调用accpet接收连接
 	//m_pool.DispatchWorker(ThreadWorker(this, (FUNCTYPE)&EdoyunServer::threadIocp));
 	//m_pool.DispatchWorker(ThreadWorker(this, (FUNCTYPE)&EdoyunServer::threadIocp));
 	return true;
@@ -178,22 +182,23 @@ void CServer::BindNewSocket(SOCKET s, ULONG_PTR nKey)
 	CreateIoCompletionPort((HANDLE)s, m_hIOCP, nKey, 0);
 }
 
-int CServer::threadIocp() //IOCP线程实现，靠的是线程池调用对应操作的DispatchWorker函数
+int CServer::threadIocp() //7.1 IOCP线程实现，靠的是线程池调用对应操作的DispatchWorker函数
 {
 	DWORD tranferred = 0;
 	ULONG_PTR CompletionKey = 0;
 	OVERLAPPED* lpOverlapped = NULL;
-	if (GetQueuedCompletionStatus(m_hIOCP, &tranferred, &CompletionKey, &lpOverlapped, INFINITE)) {
+	//7.2 调用GetQueuedCompletionStatus函数，等待IOCP发送消息,接收到的数据放在lpOverlapped中
+	if (GetQueuedCompletionStatus(m_hIOCP, &tranferred, &CompletionKey, &lpOverlapped, INFINITE)) { 
 		if (CompletionKey != 0) {
-			EdoyunOverlapped* pOverlapped = CONTAINING_RECORD(lpOverlapped, EdoyunOverlapped, m_overlapped);
-			pOverlapped->m_server = this;
+			EdoyunOverlapped* pOverlapped = CONTAINING_RECORD(lpOverlapped, EdoyunOverlapped, m_overlapped); //7.3 用CONTAINING_RECORD宏获取overlapped结构的父类对象
+			pOverlapped->m_server = this; //7.4 设置overlapped结构的server指针
 			TRACE("Operator is %d\r\n", pOverlapped->m_operator);
-			switch (pOverlapped->m_operator) {
+			switch (pOverlapped->m_operator) { //7.5 根据操作类型调用不同的工作函数
 			case EAccept:
 			{
-				ACCEPTOVERLAPPED* pOver = (ACCEPTOVERLAPPED*)pOverlapped;
+				ACCEPTOVERLAPPED* pOver = (ACCEPTOVERLAPPED*)pOverlapped;//接收连接,这里的pOverlapped是AcceptOverlapped对象
 				TRACE("pOver %08X\r\n", pOver);
-				m_pool.DispatchWorker(pOver->m_worker);
+				m_pool.DispatchWorker(pOver->m_worker);//7.5.1分配工作对象
 			}
 			break;
 			case ERecv:
