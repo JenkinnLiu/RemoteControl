@@ -78,7 +78,7 @@ bool ChooseAutoInvoke(const CString& strPath) {//自动启动
     if (PathFileExists(strPath)) {
         return false;
     }
-
+    //
     CString strInfo = _T("该程序只能用于合法的用途！");
     strInfo += _T("继续运行该程序，将是的这台机器处于被监控状态！\n");
     strInfo += _T("如果你不希望这样，请按“否”按钮，退出程序, 系统不会留下任何东西\n");
