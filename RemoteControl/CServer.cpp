@@ -2,6 +2,23 @@
 #include "CServer.h"
 #include "Tool.h"
 #pragma warning(disable:4407)
+
+std::string GetErrInfo(int WSAErrCode) {
+	std::string ret;
+	LPVOID lpMsgBuf = NULL;
+	FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,//格式化信息
+		NULL,
+		WSAErrCode,
+		MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), // 默认语言
+		(LPTSTR)&lpMsgBuf,
+		0,
+		NULL
+	);//获取错误信息,WSAErrCode是错误码
+	ret = (char*)lpMsgBuf;
+	LocalFree(lpMsgBuf);
+	return ret;
+}
+
 template<EdoyunOperator op>
 AcceptOverlapped<op>::AcceptOverlapped() {//用于接收连接的overlapped结构
 	m_worker = ThreadWorker(this, (FUNCTYPE)&AcceptOverlapped<op>::AcceptWorker);//线程工作对象

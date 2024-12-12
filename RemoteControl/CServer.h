@@ -164,7 +164,7 @@ public:
 			*pClient, *pClient))
 		{
 			if (WSAGetLastError() != ERROR_SUCCESS && (WSAGetLastError() != WSA_IO_PENDING)) {
-				TRACE("连接失败：%d %s\r\n", WSAGetLastError(), CTool::GetErrInfo(WSAGetLastError()).c_str());
+				TRACE("连接失败：%d %s\r\n", WSAGetLastError(), GetErrInfo(WSAGetLastError()).c_str());
 				closesocket(m_sock);
 				m_sock = INVALID_SOCKET;
 				m_hIOCP = INVALID_HANDLE_VALUE;
